@@ -11,30 +11,39 @@
 #   UPSTREAM_REPO     GitHub repository slug to check (e.g. valkey-io/valkey)
 #
 # Optional environment variables:
-#   FORCE_TAG         Skip API call and use this tag directly (e.g. "9.0.3")
+#   FORCE_TAG         Skip upstream API call and build exactly this tag (e.g. "9.0.3")
 #   STATE_FILE        Path to the JSON file storing last processed tag per major
 #                     Default: last_release.json
 #                     Format:  {"8": "8.0.1", "9": "9.0.3"}
 #   ALWAYS_BUILD      Set to "true" to output has_new=true unconditionally
 #                     Default: false
+#   APT_BRANCH        Name of the git branch that holds the APT repository
+#                     Default: apt
 #   GITHUB_TOKEN      Bearer token for GitHub API authentication
 #   GITHUB_OUTPUT     Path to the GitHub Actions output file (set by runner)
 #
 # Outputs:
 #   has_new           "true" or "false"
-#   new_releases      JSON array of new releases, e.g.:
+#   new_releases      JSON array of releases to build this run, e.g.:
 #                     [{"tag":"9.0.3","major":"9"},{"tag":"8.1.0","major":"8"}]
 #                     Empty array "[]" when has_new=false
-#   all_releases      JSON array of ALL currently active major versions (not just new ones).
-#                     Use this for index.html so it always shows every maintained major,
-#                     even when only one major had a new release this run.
+#   all_releases      JSON array reflecting every major version currently present
+#                     in the APT repository (apt branch), merged with new_releases
+#                     so the entry being deployed now is always included.
+#                     Used by index.html to render one tab per deployed major.
 #                     e.g. [{"tag":"9.0.3","major":"9"},{"tag":"8.1.0","major":"8"}]
-#   latest_tag        Highest version tag found across all majors (for display/README)
+#   latest_tag        Highest version tag found across all majors on GitHub
+#                     (for display / README purposes)
 #
-# State file:
+# State file (last_release.json):
+#   Used ONLY for change-detection in the scheduled path — to know which majors
+#   have already been built so we don't rebuild them unnecessarily.
+#   It is NOT used as the source of truth for all_releases; that comes from the
+#   actual contents of the APT repository (apt branch).
+#
 #   When has_new=true and ALWAYS_BUILD is not "true" and FORCE_TAG is not set,
-#   STATE_FILE is updated with the new tags per major. The workflow is responsible
-#   for committing STATE_FILE back to the repository.
+#   STATE_FILE is updated with the new tags per major.  The workflow is
+#   responsible for committing STATE_FILE back to the repository.
 #
 #   Migration: if STATE_FILE does not exist but a legacy last_release.txt does,
 #   the single tag in that file is automatically migrated to JSON format.
@@ -45,6 +54,7 @@ UPSTREAM_REPO="${UPSTREAM_REPO:?ERROR: UPSTREAM_REPO is required (e.g. valkey-io
 STATE_FILE="${STATE_FILE:-last_release.json}"
 ALWAYS_BUILD="${ALWAYS_BUILD:-false}"
 FORCE_TAG="${FORCE_TAG:-}"
+APT_BRANCH="${APT_BRANCH:-apt}"
 
 log() {
     printf '[check-release] %s\n' "$*" >&2
@@ -126,7 +136,7 @@ fetch_latest_per_major() {
     local response
     response=$(
         curl "${curl_args[@]}" "$api_url" \
-            || die "Failed to fetch releases from GitHub API${GITHUB_TOKEN:+}$(
+            || die "Failed to fetch releases from GitHub API$(
                 [[ -z "${GITHUB_TOKEN:-}" ]] && printf ' (tip: set GITHUB_TOKEN to avoid rate limiting)'
             )"
     )
@@ -155,6 +165,101 @@ fetch_latest_per_major() {
     ' || die "jq failed while parsing GitHub API response — is jq installed and is the response valid JSON?"
 }
 
+# Read the highest deployed version per major directly from the APT repository
+# stored in the apt branch.  Returns a JSON array sorted by major descending:
+#   [{"major":"9","tag":"9.0.3"},{"major":"8","tag":"8.1.6"},{"major":"7","tag":"7.2.12"}]
+#
+# Strategy:
+#   1. Shallow-fetch the apt branch so git-show can access its tree without a
+#      full clone.  Safe to call even when the branch doesn't exist yet.
+#   2. Parse conf/distributions to discover which valkeyN suites are present.
+#   3. For each suite read one representative Packages file and extract Version.
+#   4. Strip the Debian revision + distro suffix (e.g. "8.1.6-1~noble" → "8.1.6").
+#
+# Returns an empty array [] gracefully when:
+#   - the apt branch does not exist yet (first ever build)
+#   - the fetch fails for any reason
+#   - conf/distributions is missing or contains no matching suites
+fetch_deployed_per_major() {
+    # Shallow-fetch the apt branch.  --depth=1 is enough to read the tree.
+    # Redirect stderr so a missing branch doesn't pollute CI logs with errors.
+    if ! git fetch --depth=1 origin "${APT_BRANCH}" 2>/dev/null; then
+        log "apt branch '${APT_BRANCH}' not found or fetch failed — assuming no deployed packages"
+        printf '[]'
+        return
+    fi
+
+    # Read conf/distributions to find all suite (Codename) entries.
+    local distributions
+    if ! distributions="$(git show "origin/${APT_BRANCH}:conf/distributions" 2>/dev/null)"; then
+        log "conf/distributions not found in ${APT_BRANCH} branch"
+        printf '[]'
+        return
+    fi
+
+    # Collect all Codename values that match the pattern valkeyN (N = digits).
+    local codenames
+    codenames="$(printf '%s\n' "$distributions" \
+        | grep '^Codename:' | awk '{print $2}' | grep -E '^valkey[0-9]+$')" || true
+
+    if [[ -z "$codenames" ]]; then
+        log "No valkey suites found in ${APT_BRANCH}:conf/distributions"
+        printf '[]'
+        return
+    fi
+
+    local result='[]'
+
+    while IFS= read -r codename; do
+        local major="${codename#valkey}"
+
+        # Read a representative Packages file.  noble/amd64 is used as the
+        # canonical sample — every component/arch carries the same upstream
+        # version number.  Fall back silently if that particular file is absent.
+        local packages_content
+        if ! packages_content="$(git show \
+                "origin/${APT_BRANCH}:dists/${codename}/noble/binary-amd64/Packages" \
+                2>/dev/null)"; then
+            log "Packages file not found for ${codename}/noble/amd64 — skipping"
+            continue
+        fi
+
+        # Version field looks like "8.1.6-1~noble".
+        # Strip "-<revision>~<distro>" to recover the bare upstream tag.
+        local version
+        version="$(printf '%s\n' "$packages_content" \
+            | grep '^Version:' | head -1 | awk '{print $2}' \
+            | sed 's/-[0-9][0-9]*~.*//')"
+
+        if [[ -z "$version" ]]; then
+            log "Could not parse Version from Packages for ${codename} — skipping"
+            continue
+        fi
+
+        result="$(printf '%s\n' "$result" \
+            | jq -c --arg m "$major" --arg t "$version" \
+                '. + [{major: $m, tag: $t}]')"
+        log "Deployed: valkey${major} = ${version}"
+    done <<< "$codenames"
+
+    printf '%s\n' "$result" | jq -c 'sort_by(.major | tonumber) | reverse'
+}
+
+# Merge two JSON arrays of {major, tag} objects, keeping the highest semver tag
+# per major and returning the result sorted by major descending.
+merge_releases() {
+    local a="$1"   # JSON array (base, e.g. deployed)
+    local b="$2"   # JSON array (overlay, e.g. new_releases)
+
+    jq -cn \
+        --argjson a "$a" \
+        --argjson b "$b" \
+        '$a + $b
+         | group_by(.major)
+         | map(sort_by(.tag | split(".") | map(tonumber)) | last)
+         | sort_by(.major | tonumber) | reverse'
+}
+
 # ── FORCE_TAG fast path ────────────────────────────────────────────────────────
 
 if [[ -n "$FORCE_TAG" ]]; then
@@ -164,27 +269,14 @@ if [[ -n "$FORCE_TAG" ]]; then
 
     new_releases="[{\"tag\":\"${FORCE_TAG}\",\"major\":\"${MAJOR}\"}]"
 
-    # Build all_releases from the deployed-state file merged with the forced tag.
-    # This ensures index.html shows only versions that are actually present in the
-    # APT repository (tracked by STATE_FILE), not every tag that exists on GitHub.
-    state="$(load_state)"
-    all_releases="$(
-        jq -cn \
-            --argjson state "$state" \
-            --arg major "$MAJOR" \
-            --arg tag "$FORCE_TAG" \
-            '($state | to_entries | map({major: .key, tag: .value}))
-             + [{major: $major, tag: $tag}]
-             | group_by(.major)
-             | map(sort_by(.tag | split(".") | map(tonumber)) | last)
-             | sort_by(.major | tonumber) | reverse'
-    )"
+    # all_releases: what is (or will be) in the APT repository.
+    # Read the apt branch for the real deployed state, then merge the forced
+    # entry so the version being built now is always reflected.
+    deployed="$(fetch_deployed_per_major)"
+    all_releases="$(merge_releases "$deployed" "$new_releases")"
 
-    # Overall highest version tag across all known deployed majors.
-    latest_tag="$(echo "$all_releases" | jq -r '
-        [.[].tag]
-        | sort_by(split(".") | map(tonumber))
-        | last
+    latest_tag="$(printf '%s\n' "$all_releases" | jq -r '
+        [.[].tag] | sort_by(split(".") | map(tonumber)) | last
     ')"
 
     emit_output "has_new"      "true"
@@ -195,7 +287,7 @@ if [[ -n "$FORCE_TAG" ]]; then
     exit 0
 fi
 
-# ── Fetch latest per major ─────────────────────────────────────────────────────
+# ── Fetch latest per major from GitHub ────────────────────────────────────────
 
 latest_per_major_json="$(fetch_latest_per_major)"
 log "Latest releases per major: $latest_per_major_json"
@@ -219,31 +311,44 @@ latest_tag="$(echo "$latest_per_major_json" | jq -r '
 ')"
 log "Overall latest tag: $latest_tag"
 
-# ── Compare with state ────────────────────────────────────────────────────────
+# ── Read deployed state from apt branch ───────────────────────────────────────
+#
+# This is the single authoritative source for all_releases (index.html tabs).
+# It is also used in ALWAYS_BUILD mode to restrict rebuilds to majors that are
+# already present in the repository.
 
-state="$(load_state)"
-log "Current state: $state"
+deployed_per_major="$(fetch_deployed_per_major)"
+log "Deployed per major: ${deployed_per_major}"
+
+# ── Determine new_releases ────────────────────────────────────────────────────
 
 if [[ "$ALWAYS_BUILD" == "true" ]]; then
-    # Rebuild only majors that are already tracked in the state file (i.e. have
-    # previously been built and deployed).  This prevents accidentally building
-    # a brand-new major that was never part of the repository just because it
-    # appeared on GitHub.  If the state is empty (very first run) we fall back
-    # to all latest versions from GitHub so the repo can be seeded.
-    state_count="$(echo "$state" | jq 'length')"
-    if [[ "$state_count" -gt 0 ]]; then
-        log "ALWAYS_BUILD=true — rebuilding ${state_count} state-tracked major(s)"
+    deployed_count="$(printf '%s\n' "$deployed_per_major" | jq 'length')"
+
+    if [[ "$deployed_count" -gt 0 ]]; then
+        # Rebuild only majors that are already present in the APT repository.
+        # This prevents accidentally building a brand-new major that appeared on
+        # GitHub but was never part of this repo.
+        log "ALWAYS_BUILD=true — rebuilding ${deployed_count} deployed major(s)"
         new_releases="$(
-            echo "$latest_per_major_json" | jq -c \
-                --argjson state "$state" \
-                '[.[] | select($state[.major] != null) | {tag: .tag, major: .major}]'
+            printf '%s\n' "$latest_per_major_json" | jq -c \
+                --argjson deployed "$deployed_per_major" \
+                '[.[] | . as $r
+                  | select(($deployed | map(.major) | index($r.major)) != null)
+                  | {tag: .tag, major: .major}]'
         )"
     else
-        log "ALWAYS_BUILD=true — state is empty, seeding from GitHub"
+        # No apt branch yet — seed the repo with all current GitHub releases.
+        log "ALWAYS_BUILD=true — apt branch empty, seeding all majors from GitHub"
         new_releases="$(echo "$latest_per_major_json" | jq -c '[.[] | {tag: .tag, major: .major}]')"
     fi
+
 else
-    # Select only those majors whose latest tag differs from the stored tag.
+    # Scheduled path: only build majors whose latest GitHub tag differs from
+    # what was last recorded in STATE_FILE.
+    state="$(load_state)"
+    log "Current state: $state"
+
     new_releases="$(
         echo "$latest_per_major_json" | jq -c \
             --argjson state "$state" \
@@ -268,18 +373,13 @@ fi
 has_new="false"
 [[ "$(echo "$new_releases" | jq 'length')" -gt 0 ]] && has_new="true"
 
-# all_releases: versions actually present in the APT repository.
-# Derived from the state (previously deployed) merged with new_releases (being
-# deployed now), so index.html never lists versions that were never built.
-all_releases="$(
-    jq -cn \
-        --argjson state "$state" \
-        --argjson new "$new_releases" \
-        '($state | to_entries | map({major: .key, tag: .value})) + $new
-         | group_by(.major)
-         | map(sort_by(.tag | split(".") | map(tonumber)) | last)
-         | sort_by(.major | tonumber) | reverse'
-)"
+# ── Compute all_releases ──────────────────────────────────────────────────────
+#
+# Source of truth: what is actually in the APT repository (apt branch), merged
+# with new_releases so the version(s) being deployed now are always included
+# even though they haven't landed in the apt branch yet.
+
+all_releases="$(merge_releases "$deployed_per_major" "$new_releases")"
 
 emit_output "has_new"      "$has_new"
 emit_output "new_releases" "$new_releases"

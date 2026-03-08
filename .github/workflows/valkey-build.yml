@@ -215,24 +215,10 @@ jobs:
           PAGES_URL="https://${{ github.repository_owner }}.github.io/${REPO_NAME}"
           BUILD_DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
 
-          # Build RELEASES_JSON by merging last_release.json (all previously
-          # deployed versions) with NEW_RELEASES (current build).
-          # This ensures index.html always lists every version present in the
-          # repo — even when triggered manually with an explicit FORCE_TAG that
-          # is older or different from the latest scheduled release.
-          if [[ -f last_release.json ]]; then
-            RELEASES_JSON="$(
-              jq -cn \
-                --argjson state "$(cat last_release.json)" \
-                --argjson new "${NEW_RELEASES}" \
-                '($state | to_entries | map({major: .key, tag: .value})) + $new
-                 | group_by(.major)
-                 | map(sort_by(.tag | split(".") | map(tonumber)) | last)
-                 | sort_by(.major | tonumber) | reverse'
-            )"
-          else
-            RELEASES_JSON="${ALL_RELEASES}"
-          fi
+          # ALL_RELEASES is already the authoritative list: deployed versions
+          # (read from the apt branch by check-release.sh) merged with the
+          # versions being built this run.  Use it directly.
+          RELEASES_JSON="${ALL_RELEASES}"
 
           PROJECT_NAME="Valkey" \
           PROJECT_SLUG="valkey" \
