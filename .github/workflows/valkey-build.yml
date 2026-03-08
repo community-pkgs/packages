@@ -21,53 +21,54 @@ jobs:
   check-release:
     runs-on: ubuntu-latest
     outputs:
-      new_release: ${{ steps.check.outputs.new_release }}
-      release_tag: ${{ steps.check.outputs.release_tag }}
-      major_version: ${{ steps.check.outputs.major_version }}
+      has_new: ${{ steps.check.outputs.has_new }}
+      new_releases: ${{ steps.check.outputs.new_releases }}
+      all_releases: ${{ steps.check.outputs.all_releases }}
+      latest_tag: ${{ steps.check.outputs.latest_tag }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Fetch and check release
+      - name: Fetch and check releases
         id: check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_REPO: valkey-io/valkey
           FORCE_TAG: ${{ github.event.inputs.release_tag }}
-          STATE_FILE: last_release.txt
           ALWAYS_BUILD: ${{ github.event_name == 'workflow_dispatch' }}
-        run: bash packages/scripts/check-release.sh
+        run: bash scripts/check-release.sh
 
       - name: Commit release state and generated README
-        if: github.event_name == 'schedule' && steps.check.outputs.new_release == 'true'
+        if: github.event_name == 'schedule' && steps.check.outputs.has_new == 'true'
         run: |
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
           PAGES_URL="https://${{ github.repository_owner }}.github.io/${REPO_NAME}" \
-          bash packages/scripts/generate-readme.sh \
+          bash scripts/generate-readme.sh \
             packages/valkey/README.md \
             packages/valkey/README.md.in \
             .github/workflows/valkey-build.yml
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add last_release.txt packages/valkey/README.md
+          git add last_release.json packages/valkey/README.md
 
           # Commit only when there is an actual staged change.
           if git diff --cached --quiet; then
             echo "No changes to commit for release state or generated README"
           else
-            git commit -m "chore: update last processed release to ${{ steps.check.outputs.release_tag }}"
+            git commit -m "chore: update last processed release to ${{ steps.check.outputs.latest_tag }}"
             git push
           fi
 
   build-packages:
     needs: check-release
-    if: needs.check-release.outputs.new_release == 'true'
+    if: needs.check-release.outputs.has_new == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        release: ${{ fromJson(needs.check-release.outputs.new_releases) }}
         os:
           - image: "debian:13"
             codename: "trixie"
@@ -96,26 +97,26 @@ jobs:
           platforms: linux/${{ matrix.arch }}
           build-args: |
             DISTRO=${{ matrix.os.image }}
-            RELEASE_TAG=${{ needs.check-release.outputs.release_tag }}
-            MAJOR=${{ needs.check-release.outputs.major_version }}
+            RELEASE_TAG=${{ matrix.release.tag }}
+            MAJOR=${{ matrix.release.major }}
             ARCH=${{ matrix.arch }}
             CODENAME=${{ matrix.os.codename }}
           secrets: |
             github_token=${{ secrets.GITHUB_TOKEN }}
-          outputs: type=local,dest=./build/${{ matrix.os.codename }}-${{ matrix.arch }}
+          outputs: type=local,dest=./build/${{ matrix.release.tag }}-${{ matrix.os.codename }}-${{ matrix.arch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Upload built packages
         uses: actions/upload-artifact@v4
         with:
-          name: packages-${{ matrix.os.codename }}-${{ matrix.arch }}
-          path: ./build/${{ matrix.os.codename }}-${{ matrix.arch }}/*.deb
+          name: packages-${{ matrix.release.tag }}-${{ matrix.os.codename }}-${{ matrix.arch }}
+          path: ./build/${{ matrix.release.tag }}-${{ matrix.os.codename }}-${{ matrix.arch }}/*.deb
           retention-days: 1
 
   create-repo:
     needs: [check-release, build-packages]
-    if: needs.check-release.outputs.new_release == 'true'
+    if: needs.check-release.outputs.has_new == 'true'
     runs-on: ubuntu-latest
     concurrency:
       group: ${{ github.workflow }}-deploy-${{ github.ref }}
@@ -124,6 +125,9 @@ jobs:
     env:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
       GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+      NEW_RELEASES: ${{ needs.check-release.outputs.new_releases }}
+      ALL_RELEASES: ${{ needs.check-release.outputs.all_releases }}
+      LATEST_TAG: ${{ needs.check-release.outputs.latest_tag }}
 
     steps:
       - name: Check if apt branch exists
@@ -187,23 +191,28 @@ jobs:
 
       - name: Assemble APT repository
         run: |
-          MAJOR="${{ needs.check-release.outputs.major_version }}"
-          REPO_DIR="repo" \
-          ARTIFACTS_DIR="./downloaded-artifacts" \
-          REPO_CODENAME="valkey${MAJOR}" \
-          REPO_ORIGIN="Valkey APT Repository" \
-          REPO_LABEL="Valkey" \
-          REPO_DESCRIPTION="Valkey APT Repository" \
-          GPG_KEY_ID="${GPG_KEY_ID}" \
-          bash packages/scripts/assemble-apt-repo.sh
+          echo "$NEW_RELEASES" | jq -c '.[]' | while IFS= read -r release; do
+            TAG="$(echo "$release" | jq -r '.tag')"
+            MAJOR="$(echo "$release" | jq -r '.major')"
+
+            echo "--- Assembling valkey${MAJOR} for release ${TAG} ---"
+
+            REPO_DIR="repo" \
+            ARTIFACTS_DIR="./downloaded-artifacts" \
+            RELEASE_TAG_FILTER="${TAG}" \
+            REPO_CODENAME="valkey${MAJOR}" \
+            REPO_ORIGIN="Valkey APT Repository" \
+            REPO_LABEL="Valkey" \
+            REPO_DESCRIPTION="Valkey APT Repository" \
+            GPG_KEY_ID="${GPG_KEY_ID}" \
+            bash scripts/assemble-apt-repo.sh
+          done
 
       - name: Generate index.html
         run: |
           REPO_URL="${{ github.server_url }}/${{ github.repository }}"
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
           PAGES_URL="https://${{ github.repository_owner }}.github.io/${REPO_NAME}"
-          RELEASE_TAG="${{ needs.check-release.outputs.release_tag }}"
-          MAJOR_VERSION="${{ needs.check-release.outputs.major_version }}"
           BUILD_DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
 
           PROJECT_NAME="Valkey" \
@@ -214,15 +223,14 @@ jobs:
           REPO_URL="${REPO_URL}" \
           PAGES_URL="${PAGES_URL}" \
           APT_BRANCH_URL="${REPO_URL}/tree/apt" \
-          RELEASE_TAG="${RELEASE_TAG}" \
-          MAJOR_VERSION="${MAJOR_VERSION}" \
+          RELEASES_JSON="${ALL_RELEASES}" \
           APT_SUITE_PREFIX="valkey" \
           APT_DEFAULT_COMPONENT="<CODENAME>" \
           APT_INSTALL_PACKAGE="valkey-server" \
           MAINTAINER_EMAIL="packages@bil.co.ua" \
           OUTPUT_PATH="./repo/valkey/index.html" \
           BUILD_DATE="${BUILD_DATE}" \
-          bash packages/scripts/generate-apt-index.sh
+          bash scripts/generate-apt-index.sh
 
       - name: Generate root index.html
         run: |
@@ -238,7 +246,7 @@ jobs:
           MAINTAINER_EMAIL="packages@bil.co.ua" \
           OUTPUT_PATH="./repo/index.html" \
           BUILD_DATE="${BUILD_DATE}" \
-          bash packages/scripts/generate-root-index.sh \
+          bash scripts/generate-root-index.sh \
             "valkey|Valkey|High-performance in-memory data store (Redis fork)"
 
       - name: Deploy to GitHub Pages
@@ -248,4 +256,4 @@ jobs:
           publish_dir: ./repo
           publish_branch: apt
           keep_files: true
-          commit_message: "Update APT repo for Valkey ${{ needs.check-release.outputs.release_tag }}"
+          commit_message: "Update APT repo for Valkey ${{ needs.check-release.outputs.latest_tag }}"

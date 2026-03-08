@@ -15,6 +15,11 @@
 # Expected artifact naming convention:
 #   packages-<component>-<arch>
 #
+# When RELEASE_TAG_FILTER is set, artifacts are expected to be named:
+#   packages-<release_tag>-<component>-<arch>
+# Only artifacts matching that release tag are processed, and the tag prefix
+# is stripped before the component/arch are parsed.
+#
 # In the current repository layout:
 # - component = distro codename (e.g. noble, trixie)
 # - suite/codename = product major channel (e.g. valkey9)
@@ -35,6 +40,11 @@
 #   DISTRIBUTIONS_FILE  Path to final conf/distributions file
 #                       (default: <REPO_DIR>/conf/distributions)
 #   ARTIFACT_NAME_PREFIX  Prefix for artifact directories (default: packages)
+#   RELEASE_TAG_FILTER    When set, only process artifacts whose name contains
+#                         this release tag after the prefix, and strip it before
+#                         parsing the component and arch.
+#                         Example: RELEASE_TAG_FILTER=9.0.3 processes
+#                         packages-9.0.3-noble-amd64 as component=noble arch=amd64
 #
 # Example:
 #   REPO_DIR=repo \
@@ -44,7 +54,7 @@
 #   REPO_LABEL="Valkey" \
 #   REPO_DESCRIPTION="Valkey APT Repository" \
 #   GPG_KEY_ID="$GPG_KEY_ID" \
-#   packages/scripts/assemble-apt-repo.sh
+#   scripts/assemble-apt-repo.sh
 
 set -euo pipefail
 
@@ -60,6 +70,7 @@ REPO_SUITE="${REPO_SUITE:-stable}"
 DISTRIBUTIONS_DIR="${DISTRIBUTIONS_DIR:-${REPO_DIR}/conf/distributions.d}"
 DISTRIBUTIONS_FILE="${DISTRIBUTIONS_FILE:-${REPO_DIR}/conf/distributions}"
 ARTIFACT_NAME_PREFIX="${ARTIFACT_NAME_PREFIX:-packages}"
+RELEASE_TAG_FILTER="${RELEASE_TAG_FILTER:-}"
 
 log() {
     printf '[assemble-apt-repo] %s\n' "$*" >&2
@@ -168,7 +179,21 @@ for artifact_dir in "${ARTIFACTS_DIR}"/*; do
 
     artifact_name="$(basename "$artifact_dir")"
 
-    if [[ "$artifact_name" =~ ^${ARTIFACT_NAME_PREFIX}-(.+)-([^-]+)$ ]]; then
+    if [[ -n "$RELEASE_TAG_FILTER" ]]; then
+        # When a release tag filter is set, only process artifacts that match
+        # packages-<tag>-<component>-<arch> and strip the tag before parsing.
+        if [[ "$artifact_name" != "${ARTIFACT_NAME_PREFIX}-${RELEASE_TAG_FILTER}-"* ]]; then
+            log "Skipping artifact $artifact_name (does not match tag filter $RELEASE_TAG_FILTER)"
+            continue
+        fi
+        parse_name="${artifact_name#${ARTIFACT_NAME_PREFIX}-${RELEASE_TAG_FILTER}-}"
+        if [[ "$parse_name" =~ ^(.+)-([^-]+)$ ]]; then
+            component="${BASH_REMATCH[1]}"
+            arch="${BASH_REMATCH[2]}"
+        else
+            die "Unexpected artifact name format after stripping tag: $parse_name (from $artifact_name)"
+        fi
+    elif [[ "$artifact_name" =~ ^${ARTIFACT_NAME_PREFIX}-(.+)-([^-]+)$ ]]; then
         component="${BASH_REMATCH[1]}"
         arch="${BASH_REMATCH[2]}"
     else

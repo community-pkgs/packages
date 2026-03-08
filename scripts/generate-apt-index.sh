@@ -11,8 +11,13 @@
 #   PROJECT_SLUG         e.g. "valkey" (used in fallback URLs/titles)
 #   REPO_URL             e.g. "https://github.com/owner/repo"
 #   PAGES_URL            e.g. "https://owner.github.io/repo" (or custom domain)
-#   RELEASE_TAG          e.g. "9.0.3"
-#   MAJOR_VERSION        e.g. "9"
+#   RELEASES_JSON        JSON array of all active releases, e.g.:
+#                        '[{"tag":"9.0.3","major":"9"},{"tag":"8.1.0","major":"8"}]'
+#                        When set, overrides RELEASE_TAG / MAJOR_VERSION for display.
+#                        Falls back to constructing a single-element array from
+#                        RELEASE_TAG + MAJOR_VERSION when not set.
+#   RELEASE_TAG          e.g. "9.0.3"  (used as fallback when RELEASES_JSON unset)
+#   MAJOR_VERSION        e.g. "9"      (used as fallback when RELEASES_JSON unset)
 #
 # Optional environment variables:
 #   PROJECT_UPSTREAM_URL   e.g. "https://github.com/valkey-io/valkey"
@@ -50,20 +55,62 @@ set -euo pipefail
 : "${RELEASE_TAG:=unknown}"
 : "${MAJOR_VERSION:=0}"
 
+# If RELEASES_JSON is not provided, build a single-element array from the
+# legacy RELEASE_TAG / MAJOR_VERSION variables so the rest of the script
+# works uniformly regardless of how it is called.
+if [[ -z "${RELEASES_JSON:-}" ]]; then
+  RELEASES_JSON="[{\"tag\":\"${RELEASE_TAG}\",\"major\":\"${MAJOR_VERSION}\"}]"
+fi
+
 : "${APT_SUITE_PREFIX:=$PROJECT_SLUG}"
 : "${APT_DEFAULT_COMPONENT:=<CODENAME>}"
 : "${APT_INSTALL_PACKAGE:=${PROJECT_SLUG}-server}"
 
+# Validate that RELEASES_JSON is a non-empty array.
+if ! echo "$RELEASES_JSON" | jq -e 'type == "array" and length > 0' > /dev/null 2>&1; then
+  echo "generate-apt-index: WARNING: RELEASES_JSON is empty or invalid, falling back to RELEASE_TAG" >&2
+  RELEASES_JSON="[{\"tag\":\"${RELEASE_TAG}\",\"major\":\"${MAJOR_VERSION}\"}]"
+fi
+
 : "${MAINTAINER_EMAIL:=packages@example.com}"
 : "${OUTPUT_PATH:=./index.html}"
+
+# Sort releases by major version descending (highest first) for display.
+RELEASES_JSON="$(echo "$RELEASES_JSON" | jq -c '[sort_by(.major | tonumber) | reverse[]]')"
 
 if [[ -z "${BUILD_DATE:-}" ]]; then
   BUILD_DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
 fi
 
 # ----- derived values -----
-APT_SUITE="${APT_SUITE_PREFIX}${MAJOR_VERSION}"
 PAGE_TITLE="${PROJECT_NAME} APT Repository"
+
+# ----- per-major version badges -----
+_versions_html=""
+while IFS= read -r rel; do
+  tag="$(echo "$rel" | jq -r '.tag')"
+  major="$(echo "$rel" | jq -r '.major')"
+  _versions_html+="<span class=\"badge\">${major}.x &rarr; v${tag}</span>"$'\n'
+done < <(echo "$RELEASES_JSON" | jq -c '.[]')
+
+# ----- per-major install blocks -----
+_install_blocks_html=""
+while IFS= read -r rel; do
+  tag="$(echo "$rel" | jq -r '.tag')"
+  major="$(echo "$rel" | jq -r '.major')"
+  suite="${APT_SUITE_PREFIX}${major}"
+  _install_blocks_html+="$(cat <<ENDBLOCK
+
+    <section class="install-block">
+      <div class="install-label">${PROJECT_NAME} ${major}.x &nbsp;<code class="suite-badge">${suite}</code></div>
+<pre>sudo mkdir -p /etc/apt/keyrings
+curl -fsSL ${PAGES_URL}/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/${PROJECT_SLUG}.gpg
+echo "deb [signed-by=/etc/apt/keyrings/${PROJECT_SLUG}.gpg] ${PAGES_URL} ${suite} \$(. /etc/os-release && echo "\${VERSION_CODENAME}")" | sudo tee /etc/apt/sources.list.d/${PROJECT_SLUG}.list
+sudo apt update && sudo apt install ${APT_INSTALL_PACKAGE}</pre>
+    </section>
+ENDBLOCK
+)"
+done < <(echo "$RELEASES_JSON" | jq -c '.[]')
 
 # ----- logo -----
 # Build the CSS block and inner HTML for the logo area before the heredoc so
@@ -131,6 +178,12 @@ ${_logo_css}
       margin-bottom: 1.5rem;
       line-height: 1.55;
     }
+    .versions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
     .badge {
       display: inline-block;
       background: #21262d;
@@ -139,7 +192,15 @@ ${_logo_css}
       padding: 0.2rem 0.75rem;
       font-size: 0.8rem;
       color: #79c0ff;
-      margin-bottom: 1.5rem;
+    }
+    .suite-badge {
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 0.1rem 0.4rem;
+      font-size: 0.78rem;
+      color: #79c0ff;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     }
     .links { display: flex; flex-direction: column; gap: 0.8rem; margin-bottom: 1.5rem; }
     .link-item {
@@ -205,7 +266,8 @@ ${_logo_css}
       Built automatically from upstream releases.
     </p>
 
-    <div class="badge">Latest: v${RELEASE_TAG}</div>
+    <div class="versions">
+${_versions_html}    </div>
 
     <section class="links">
       <a class="link-item" href="${PROJECT_README_URL}" target="_blank" rel="noopener">
@@ -243,17 +305,12 @@ ${_logo_css}
 
     <hr class="divider" />
 
-    <section class="install-block">
-      <div class="install-label">Quick install (set component for your distro)</div>
-<pre>sudo mkdir -p /etc/apt/keyrings
-curl -fsSL ${PAGES_URL}/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/${PROJECT_SLUG}.gpg
-echo "deb [signed-by=/etc/apt/keyrings/${PROJECT_SLUG}.gpg] ${PAGES_URL} ${APT_SUITE} \$(. /etc/os-release && echo \"\${VERSION_CODENAME}\")" | sudo tee /etc/apt/sources.list.d/${PROJECT_SLUG}.list
-sudo apt update && sudo apt install ${APT_INSTALL_PACKAGE}</pre>
-    </section>
+${_install_blocks_html}
 
     <hr class="divider" />
 
     <p class="footer">
+      Built on ${BUILD_DATE}<br />
       Maintained by <a href="https://github.com/community-pkgs/packages">community-pkgs</a>
     </p>
   </main>

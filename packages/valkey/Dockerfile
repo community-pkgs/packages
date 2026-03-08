@@ -50,7 +50,7 @@ RUN curl -fSL \
     && make distclean
 
 COPY packages/valkey/debian/  debian/
-COPY packages/scripts/gen-changelog-github.sh /usr/local/bin/gen-changelog-github.sh
+COPY scripts/gen-changelog-github.sh /usr/local/bin/gen-changelog-github.sh
 RUN chmod +x /usr/local/bin/gen-changelog-github.sh
 
 # GITHUB_TOKEN is injected via BuildKit secret so it never appears in image
