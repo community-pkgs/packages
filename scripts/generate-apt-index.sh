@@ -85,36 +85,54 @@ fi
 # ----- derived values -----
 PAGE_TITLE="${PROJECT_NAME} APT Repository"
 
-# ----- per-major version badges -----
-_versions_html=""
+# ----- tabs: radio inputs (first one checked) -----
+_tab_inputs=""
+_first_tab=true
 while IFS= read -r rel; do
-  tag="$(echo "$rel" | jq -r '.tag')"
   major="$(echo "$rel" | jq -r '.major')"
-  _versions_html+="<span class=\"badge\">${major}.x &rarr; v${tag}</span>"$'\n'
+  if [[ "$_first_tab" == "true" ]]; then
+    _tab_inputs+="  <input type=\"radio\" name=\"vtab\" id=\"tab-major-${major}\" class=\"tab-input\" checked>"$'\n'
+    _first_tab=false
+  else
+    _tab_inputs+="  <input type=\"radio\" name=\"vtab\" id=\"tab-major-${major}\" class=\"tab-input\">"$'\n'
+  fi
 done < <(echo "$RELEASES_JSON" | jq -c '.[]')
 
-# ----- per-major install blocks -----
-_install_blocks_html=""
+# ----- tabs: labels -----
+_tab_labels_html=""
+while IFS= read -r rel; do
+  major="$(echo "$rel" | jq -r '.major')"
+  tag="$(echo "$rel" | jq -r '.tag')"
+  _tab_labels_html+="      <label for=\"tab-major-${major}\" class=\"tab-label\">${PROJECT_NAME} ${major}.x<span class=\"tab-version\">v${tag}</span></label>"$'\n'
+done < <(echo "$RELEASES_JSON" | jq -c '.[]')
+
+# ----- tabs: panels with install commands -----
+_tab_panels_html=""
 while IFS= read -r rel; do
   tag="$(echo "$rel" | jq -r '.tag')"
   major="$(echo "$rel" | jq -r '.major')"
   suite="${APT_SUITE_PREFIX}${major}"
-  _install_blocks_html+="$(cat <<ENDBLOCK
-
-    <section class="install-block">
-      <div class="install-label">${PROJECT_NAME} ${major}.x &nbsp;<code class="suite-badge">${suite}</code></div>
-<pre>sudo mkdir -p /etc/apt/keyrings
+  _tab_panels_html+="$(cat <<ENDPANEL
+      <div class="tab-panel" data-major="${major}">
+        <pre>sudo mkdir -p /etc/apt/keyrings
 curl -fsSL ${PAGES_URL}/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/${PROJECT_SLUG}.gpg
-echo "deb [signed-by=/etc/apt/keyrings/${PROJECT_SLUG}.gpg] ${PAGES_URL} ${suite} \$(. /etc/os-release && echo "\${VERSION_CODENAME}")" | sudo tee /etc/apt/sources.list.d/${PROJECT_SLUG}.list
+echo "deb [signed-by=/etc/apt/keyrings/${PROJECT_SLUG}.gpg] ${PAGES_URL} ${suite} \$(. /etc/os-release && echo "\${VERSION_CODENAME}")" \\
+  | sudo tee /etc/apt/sources.list.d/${PROJECT_SLUG}.list
 sudo apt update && sudo apt install ${APT_INSTALL_PACKAGE}</pre>
-    </section>
-ENDBLOCK
-)"
+      </div>
+ENDPANEL
+)"$'\n'
+done < <(echo "$RELEASES_JSON" | jq -c '.[]')
+
+# ----- tabs: per-major CSS rules (panel visibility + active label) -----
+_tab_css_rules=""
+while IFS= read -r rel; do
+  major="$(echo "$rel" | jq -r '.major')"
+  _tab_css_rules+="    #tab-major-${major}:checked ~ .tabs-wrapper .tab-panel[data-major=\"${major}\"] { display: block; }"$'\n'
+  _tab_css_rules+="    #tab-major-${major}:checked ~ .tabs-wrapper .tab-bar label[for=\"tab-major-${major}\"] { background: #1c2128; border-color: #58a6ff; color: #58a6ff; border-bottom-color: #1c2128; }"$'\n'
 done < <(echo "$RELEASES_JSON" | jq -c '.[]')
 
 # ----- logo -----
-# Build the CSS block and inner HTML for the logo area before the heredoc so
-# that bash expansion works correctly inside the template.
 if [[ -n "${PROJECT_LOGO_PATH:-}" && -f "$PROJECT_LOGO_PATH" ]]; then
   _logo_css='    .logo-icon {
       width: 42px; height: 42px;
@@ -178,30 +196,6 @@ ${_logo_css}
       margin-bottom: 1.5rem;
       line-height: 1.55;
     }
-    .versions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-bottom: 1.5rem;
-    }
-    .badge {
-      display: inline-block;
-      background: #21262d;
-      border: 1px solid #30363d;
-      border-radius: 20px;
-      padding: 0.2rem 0.75rem;
-      font-size: 0.8rem;
-      color: #79c0ff;
-    }
-    .suite-badge {
-      background: #21262d;
-      border: 1px solid #30363d;
-      border-radius: 4px;
-      padding: 0.1rem 0.4rem;
-      font-size: 0.78rem;
-      color: #79c0ff;
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-    }
     .links { display: flex; flex-direction: column; gap: 0.8rem; margin-bottom: 1.5rem; }
     .link-item {
       display: flex;
@@ -223,15 +217,53 @@ ${_logo_css}
 
     .divider { border: none; border-top: 1px solid #30363d; margin: 1.25rem 0; }
 
-    .install-block { margin-bottom: 1.25rem; }
-    .install-label {
-      font-size: 0.8rem;
-      color: #8b949e;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 0.5rem;
+    /* ── Tabs ──────────────────────────────────────────────────── */
+    .tab-input { display: none; }
+    .tab-panel  { display: none; }
+
+${_tab_css_rules}
+    .tabs-container { margin-bottom: 0.25rem; }
+
+    .tabs-wrapper {}
+
+    .tab-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      margin-bottom: -1px;
+      position: relative;
+      z-index: 1;
     }
-    pre {
+    .tab-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.45rem 1rem;
+      cursor: pointer;
+      border: 1px solid #30363d;
+      border-bottom: 1px solid #30363d;
+      border-radius: 6px 6px 0 0;
+      background: #0d1117;
+      color: #8b949e;
+      font-size: 0.88rem;
+      font-weight: 500;
+      user-select: none;
+      transition: color 0.12s, background 0.12s, border-color 0.12s;
+    }
+    .tab-label:hover { color: #e6edf3; background: #161b22; border-color: #484f58; }
+    .tab-version {
+      font-size: 0.75rem;
+      color: #6e7681;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+
+    .tab-panels {
+      border: 1px solid #30363d;
+      border-radius: 0 6px 6px 6px;
+      background: #1c2128;
+      padding: 1rem;
+    }
+    .tab-panel pre {
       background: #0d1117;
       border: 1px solid #30363d;
       border-radius: 6px;
@@ -239,8 +271,9 @@ ${_logo_css}
       font-size: 0.82rem;
       color: #a5d6ff;
       overflow-x: auto;
-      line-height: 1.55;
+      line-height: 1.65;
       white-space: pre;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     }
 
     .footer {
@@ -265,9 +298,6 @@ ${_logo_css}
       <a href="${PROJECT_UPSTREAM_URL}" style="color:#58a6ff;text-decoration:none;">${PROJECT_NAME}</a>.
       Built automatically from upstream releases.
     </p>
-
-    <div class="versions">
-${_versions_html}    </div>
 
     <section class="links">
       <a class="link-item" href="${PROJECT_README_URL}" target="_blank" rel="noopener">
@@ -305,13 +335,23 @@ ${_versions_html}    </div>
 
     <hr class="divider" />
 
-${_install_blocks_html}
+    <div class="tabs-container">
+${_tab_inputs}
+      <div class="tabs-wrapper">
+        <div class="tab-bar">
+${_tab_labels_html}
+        </div>
+        <div class="tab-panels">
+${_tab_panels_html}
+        </div>
+      </div>
+    </div>
 
     <hr class="divider" />
 
     <p class="footer">
       Built on ${BUILD_DATE}<br />
-      Maintained by <a href="https://github.com/community-pkgs/packages">community-pkgs</a>
+      Maintained by <a href="mailto:${MAINTAINER_EMAIL}">${MAINTAINER_EMAIL}</a>
     </p>
   </main>
 </body>
