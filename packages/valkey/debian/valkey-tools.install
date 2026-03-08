@@ -1,0 +1,5 @@
+src/valkey-cli            /usr/bin
+src/valkey-benchmark      /usr/bin
+src/valkey-check-aof      /usr/bin
+src/valkey-check-rdb      /usr/bin
+debian/bash-completion/*  /usr/share/bash-completion/completions

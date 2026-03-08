@@ -1,0 +1,39 @@
+.TH VALKEY-SENTINEL 1 "2024"
+.SH NAME
+valkey-sentinel \- High availability monitoring for Valkey
+.SH SYNOPSIS
+.B valkey-sentinel
+.RI configfile
+.SH DESCRIPTION
+Valkey Sentinel provides high availability for Valkey. It monitors Valkey
+server instances, notifies administrators about changed state, and performs
+automatic failover if a primary is not working as expected.
+.PP
+.SH OPTIONS
+.IP "configfile"
+Read options from the specified Sentinel configuration file.
+The default configuration file is
+.B /etc/valkey/sentinel.conf
+.SH NOTES
+On Debian/Ubuntu systems,
+.B valkey-sentinel
+is managed via systemd. To start, stop or check status use:
+.PP
+.nf
+    systemctl start valkey-sentinel.service
+    systemctl stop  valkey-sentinel.service
+    systemctl status valkey-sentinel.service
+.fi
+.PP
+Multi-instance Sentinel is supported via the template unit:
+.PP
+.nf
+    systemctl start valkey-sentinel@NAME.service
+.fi
+.SH SEE ALSO
+.BR valkey-server (1),
+.BR valkey-cli (1)
+.SH AUTHOR
+Valkey was written by the Valkey contributors <https://valkey.io>.
+.PP
+This manual page was written for the Debian/Ubuntu packages.

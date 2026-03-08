@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "purge" ]; then
+    if getent passwd valkey > /dev/null 2>&1; then
+        deluser --system valkey || true
+    fi
+    if getent group valkey > /dev/null 2>&1; then
+        delgroup --system valkey || true
+    fi
+fi
+
+#DEBHELPER#

@@ -1,0 +1,139 @@
+.TH VALKEY-CLI 1 "2024"
+.SH NAME
+valkey-cli \- Command-line client for Valkey
+.SH SYNOPSIS
+.B valkey-cli
+.RI [options] [cmd [arg [arg ...]]]
+.SH DESCRIPTION
+Valkey is a high-performance, open-source key-value data store.
+It supports strings, hashes, lists, sets, sorted sets, streams,
+and other data structures.
+.PP
+\fBvalkey-cli\fP is the Valkey command-line client.
+It can be used interactively or non-interactively to send commands
+to a Valkey server and display the replies.
+.SH OPTIONS
+.TP
+\-h hostname
+Server hostname (default 127.0.0.1).
+.TP
+\-p port
+Server port (default 6379).
+.TP
+\-s socket
+Server socket (overrides host and port).
+.TP
+\-a password
+Password to use when connecting to the server (see SECURITY WARNING below).
+.TP
+\-\-pass password
+Same as \-a.
+.TP
+\-u uri
+Server URI (valkey://user:secret@localhost:6379/0).
+.TP
+\-n db
+Database number (default 0).
+.TP
+\-3
+Start session in RESP3 protocol mode.
+.TP
+\-\-tls
+Enable TLS (requires TLS support compiled in).
+.TP
+\-\-cacert file
+CA certificate file for TLS verification.
+.TP
+\-\-cert file
+Client certificate file for TLS.
+.TP
+\-\-key file
+Client private key file for TLS.
+.TP
+\-r repeat
+Execute specified command \fIrepeat\fP times.
+.TP
+\-i interval
+When \-r is used, sleep \fIinterval\fP seconds between commands.
+.TP
+\-\-no\-auth\-warning
+Do not show the security warning when using \-a.
+.TP
+\-\-stat
+Print rolling stats about server: memory, clients, requests per second.
+.TP
+\-\-latency
+Enter a mode that continuously samples latency.
+.TP
+\-\-latency\-history
+Like \-\-latency but tracks latency over time and resets every 15 seconds.
+.TP
+\-\-latency\-dist
+Shows latency as a spectrum; requires 256-color terminal.
+.TP
+\-\-lru\-test count
+Simulate a cache workload with the specified number of keys.
+.TP
+\-\-replica
+Simulate a replica showing commands received from the master.
+.TP
+\-\-rdb filename
+Transfer an RDB dump from remote server to local file.
+.TP
+\-\-hotkeys
+Fetch hot keys (requires \fBmaxmemory\-policy\fP to use LFU).
+.TP
+\-\-bigkeys
+Sample keys looking for keys with many elements (big keys).
+.TP
+\-\-memkeys
+Sample keys looking for keys consuming a lot of memory.
+.TP
+\-\-scan
+List all keys using the SCAN command.
+.TP
+\-\-pattern pat
+Useful with \-\-scan, \-\-bigkeys or \-\-hotkeys (default *).
+.TP
+\-\-intrinsic\-latency sec
+Run a test to measure intrinsic system latency for \fIsec\fP seconds.
+.TP
+\-\-eval file
+Send an Eval command using the Lua script stored in \fIfile\fP.
+.TP
+\-\-pipe
+Transfer raw Redis/RESP protocol from stdin to server.
+.TP
+\-\-pipe\-timeout n
+Abort with error if after sending all data to the server no reply is
+received within \fIn\fP seconds (default 30; use 0 to wait forever).
+.TP
+\-\-cluster
+Cluster manager commands and options.
+.TP
+\-\-verbose
+Verbose mode.
+.TP
+\-\-no\-cluster\-move
+Disable the implicit move of hash-slot to a different node when a
+MOVED error is received.
+.TP
+\-\-resp2
+Use RESP2 protocol.
+.TP
+\-\-resp3
+Use RESP3 protocol (same as \-3).
+.SH SECURITY WARNING
+Using \-a or \-\-pass to supply a password on the command line is insecure
+and will generate a warning. The password may be visible to other users
+via \fBps\fP(1) or similar tools. Prefer using the \fBVALKEY_URL\fP
+environment variable or the \fIauthenticate\fP command after connecting.
+.SH SEE ALSO
+.BR valkey-server (1),
+.BR valkey-benchmark (1),
+.BR valkey-check-aof (1),
+.BR valkey-check-rdb (1)
+.SH AUTHOR
+Valkey Contributors <https://valkey.io>.
+.PP
+This manual page is maintained by community-pkgs <https://github.com/community-pkgs/packages>.

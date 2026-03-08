@@ -1,0 +1,61 @@
+.TH VALKEY-SERVER 1 "2024"
+.SH NAME
+valkey-server \- Persistent key-value database server
+.SH SYNOPSIS
+.B valkey-server
+.RI [ configfile ]
+.RI [ options ]
+.SH DESCRIPTION
+Valkey is a high-performance, open-source key-value data store and data
+structures server. Keys can contain strings, hashes, lists, sets, sorted sets,
+bitmaps, hyperloglogs, geospatial indexes, and streams.
+.PP
+Valkey is a community-driven fork of Redis, licensed under the BSD 3-Clause
+license.
+.SH OPTIONS
+.IP "configfile"
+Read configuration from the specified file.
+Default configuration file is \fB/etc/valkey/valkey.conf\fP.
+.IP "\-\-port PORT"
+Listen on the specified port (default: 6379).
+.IP "\-\-daemonize yes|no"
+Run as a daemon (default: no; managed via systemd in this package).
+.SH NOTES
+On Debian and Ubuntu systems,
+.B valkey-server
+is managed by
+.BR systemd (1).
+The service unit is installed as \fBvalkey-server.service\fP but is
+.B not enabled or started
+automatically. Use
+.BR systemctl (1)
+to manage it:
+.PP
+.RS
+.nf
+systemctl enable valkey-server.service
+systemctl start  valkey-server.service
+.fi
+.RE
+.PP
+Multiple independent instances can be started with the template unit:
+.B valkey-server@<name>.service
+each using \fB/etc/valkey/valkey\-<name>.conf\fP as its configuration file.
+.SH FILES
+.TP
+.I /etc/valkey/valkey.conf
+Default server configuration file.
+.TP
+.I /var/lib/valkey/
+Data directory (RDB snapshots, AOF files).
+.TP
+.I /var/log/valkey/
+Log directory.
+.SH SEE ALSO
+.BR valkey-cli (1),
+.BR valkey-sentinel (1),
+.BR systemctl (1)
+.SH AUTHOR
+Maintained by community-pkgs <https://github.com/community-pkgs/packages> for the Debian/Ubuntu packages.
+.PP
+Valkey was created by the Valkey contributors. See https://valkey.io for details.

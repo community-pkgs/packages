@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "purge" ]; then
+    rm -rf /var/lib/valkey /var/log/valkey
+    rmdir --ignore-fail-on-non-empty /etc/valkey 2>/dev/null || true
+fi
+
+#DEBHELPER#

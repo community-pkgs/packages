@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    if ! getent group valkey > /dev/null 2>&1; then
+        addgroup --system valkey
+    fi
+
+    if ! getent passwd valkey > /dev/null 2>&1; then
+        adduser --system \
+                --ingroup valkey \
+                --no-create-home \
+                --shell /usr/sbin/nologin \
+                valkey
+    fi
+fi
+
+#DEBHELPER#

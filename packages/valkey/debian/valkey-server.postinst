@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    mkdir -p /var/lib/valkey /var/log/valkey
+    chown valkey:valkey /var/lib/valkey /var/log/valkey
+    chmod 750 /var/lib/valkey /var/log/valkey
+fi
+
+#DEBHELPER#

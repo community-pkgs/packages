@@ -1,0 +1,26 @@
+# -*- sh -*-
+#
+# Bash completion for valkey-cli.
+#
+# The command list is generated at package build time by parsing
+# src/commands/*.json from the Valkey source tree (see debian/rules).
+# It is accurate for this exact Valkey version and requires no running server.
+#
+
+_valkey_cli_commands='@VALKEY_COMMANDS@'
+
+_valkey-cli() {
+    COMPREPLY=()
+
+    local cur
+    cur="${COMP_WORDS[COMP_CWORD]}"
+
+    # Complete only the first positional word (the Valkey command name).
+    # Completing per-command arguments is out of scope for this script.
+    [[ $COMP_CWORD -eq 1 ]] || return 0
+
+    COMPREPLY=( $(compgen -W "${_valkey_cli_commands}" -- "${cur}") )
+    return 0
+}
+
+complete -F _valkey-cli valkey-cli

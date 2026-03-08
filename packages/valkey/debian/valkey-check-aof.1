@@ -1,0 +1,31 @@
+.TH VALKEY-CHECK-AOF 1 "2024"
+.SH NAME
+valkey-check-aof \- Check and repair Valkey AOF persistence files
+.SH SYNOPSIS
+.B valkey-check-aof
+[\-\-fix]
+.RI filename
+.SH DESCRIPTION
+Valkey is a high-performance, open-source key-value data store.
+.PP
+\fBvalkey-check-aof\fP checks the integrity of a Valkey Append-Only File (AOF)
+and can optionally repair truncated or corrupted entries.
+.SH OPTIONS
+.TP
+.B \-\-fix
+Attempt to fix the AOF file by truncating it at the first invalid entry.
+Without this option the tool only reports errors without modifying the file.
+.TP
+.I filename
+Path to the AOF file to check.
+.SH EXIT STATUS
+.TP
+.B 0
+File is valid (or was successfully repaired with \-\-fix).
+.TP
+.B 1
+File is invalid and could not be repaired, or \-\-fix was not specified.
+.SH SEE ALSO
+\fBvalkey-server\fP(1), \fBvalkey-check-rdb\fP(1)
+.SH AUTHOR
+This manual page is maintained by community-pkgs <https://github.com/community-pkgs/packages>.

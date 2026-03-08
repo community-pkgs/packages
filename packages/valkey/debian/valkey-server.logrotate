@@ -1,0 +1,10 @@
+/var/log/valkey/valkey-server.log,
+/var/log/valkey/valkey-server*.log {
+    weekly
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 640 valkey adm
+}

@@ -1,0 +1,63 @@
+[Unit]
+Description=Advanced key-value store (%I)
+After=network.target
+Documentation=https://valkey.io/docs/, man:valkey-server(1)
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/valkey-server /etc/valkey/valkey-%i.conf --supervised systemd --daemonize no
+PIDFile=/run/valkey-%i/valkey-server.pid
+TimeoutStopSec=0
+Restart=always
+User=valkey
+Group=valkey
+RuntimeDirectory=valkey-%i
+RuntimeDirectoryMode=2755
+
+UMask=007
+PrivateTmp=true
+LimitNOFILE=65535
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=-/var/lib/valkey
+ReadWritePaths=-/var/log/valkey
+ReadWritePaths=-/var/run/valkey-%i
+
+CapabilityBoundingSet=
+LockPersonality=true
+MemoryDenyWriteExecute=true
+NoNewPrivileges=true
+PrivateUsers=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+RemoveIPC=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~ @privileged @resources
+
+# valkey-server can write to its own config file when in cluster mode so we
+# permit writing there by default. If you are not using this feature, it is
+# recommended that you remove this line.
+ReadWriteDirectories=-/etc/valkey
+
+# This restricts this service from executing binaries other than valkey-server
+# itself. This is really effective at e.g. making it impossible to an
+# attacker to spawn a shell on the system, but might be more restrictive
+# than desired. If you need to, you can permit the execution of extra
+# binaries by adding an extra ExecPaths= directive with the command
+# systemctl edit valkey-server.service
+NoExecPaths=/
+ExecPaths=/usr/bin/valkey-server /usr/lib /lib
+
+[Install]
+WantedBy=multi-user.target

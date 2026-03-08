@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    mkdir -p /etc/valkey
+    if [ ! -f /etc/valkey/sentinel.conf ]; then
+        install -m 640 -o valkey -g valkey /dev/null /etc/valkey/sentinel.conf
+    else
+        chown valkey:valkey /etc/valkey/sentinel.conf
+        chmod 640 /etc/valkey/sentinel.conf
+    fi
+fi
+
+#DEBHELPER#

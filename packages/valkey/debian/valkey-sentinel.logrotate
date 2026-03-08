@@ -1,0 +1,9 @@
+/var/log/valkey/valkey-sentinel.log {
+    weekly
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 640 valkey adm
+}

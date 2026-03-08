@@ -1,0 +1,27 @@
+.TH VALKEY-CHECK-RDB 1 "2024"
+.SH NAME
+valkey-check-rdb \- Check integrity of Valkey RDB snapshot file
+.SH SYNOPSIS
+.B valkey-check-rdb
+filename
+.SH DESCRIPTION
+Valkey is a high-performance open-source key-value data store.
+.PP
+\fBvalkey-check-rdb\fP checks the integrity of a Valkey RDB snapshot (dump) file
+and reports any corruption or structural errors found.
+.SH OPTIONS
+.IP "filename"
+Path to the RDB file to check.
+.SH EXIT STATUS
+.TP
+.B 0
+The RDB file is valid.
+.TP
+.B 1
+The RDB file is corrupt or could not be read.
+.SH SEE ALSO
+\fBvalkey-server\fP(1), \fBvalkey-check-aof\fP(1)
+.SH AUTHOR
+This manual page is maintained by the package maintainer.
+Valkey was originally authored by Salvatore Sanfilippo and is now maintained
+by the Valkey community <https://valkey.io>.

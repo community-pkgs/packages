@@ -1,0 +1,72 @@
+#!/usr/bin/make -f
+
+include /usr/share/dpkg/architecture.mk
+
+DPKG_EXPORT_BUILDFLAGS = 1
+
+export BUILD_TLS = yes
+export CFLAGS CPPFLAGS LDFLAGS
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all optimize=+lto
+export DEB_CFLAGS_MAINT_APPEND = -I/usr/include/liblzf
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,-no-as-needed -ldl -llzf
+
+# Build in parallel
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    MAKEFLAGS += -j$(NUMJOBS)
+    export MAKEFLAGS
+endif
+
+# Base build flags
+MAKE_FLAGS = SERVER_CFLAGS='-Werror' BUILD_TLS=yes USE_FAST_FLOAT=yes USE_REDIS_SYMLINKS=no
+
+# RDMA support for Valkey >= 8
+# Evaluated at Makefile parse time via $(shell ...), not inside a shell recipe subprocess,
+# so the result is visible to every target including override_dh_auto_build.
+ifeq ($(shell test "$(MAJOR)" -ge 8 2>/dev/null && echo yes),yes)
+    MAKE_FLAGS += BUILD_RDMA=yes
+endif
+
+export MAKE_FLAGS
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+	dh_auto_clean
+
+# No explicit dependency on override_dh_auto_configure needed — debhelper sequences
+# configure before build automatically via "dh $@".  The old explicit dependency
+# caused configure to run twice and, more importantly, any exports inside its shell
+# recipe were lost before build started.
+override_dh_auto_build:
+	dh_auto_build -- V=1 USE_SYSTEM_JEMALLOC=yes USE_SYSTEMD=yes USE_JEMALLOC=yes $(MAKE_FLAGS)
+
+override_dh_auto_install:
+	# Populate the bash completion command list from the Valkey source JSON
+	# definitions. Every command has a corresponding entry in src/commands/*.json
+	# (introduced in Redis 7.0 / Valkey). Parsing them at build time produces a
+	# version-accurate list with no runtime server dependency.
+	{ \
+	  cmds=$$(jq -r 'keys[]' src/commands/*.json \
+	           | tr '[:upper:]' '[:lower:]' \
+	           | sort -u \
+	           | tr '\n' ' ' \
+	           | sed 's/[[:space:]]*$$//'); \
+	  sed -i "s|@VALKEY_COMMANDS@|$$cmds|" debian/bash-completion/valkey-cli; \
+	}
+	dh_auto_install
+
+override_dh_installchangelogs:
+	dh_installchangelogs
+
+override_dh_installsystemd:
+	dh_installsystemd --package=valkey-server --name=valkey-server --no-enable --no-start
+	dh_installsystemd --package=valkey-server --name=valkey-server@ --no-enable --no-start
+	dh_installsystemd --package=valkey-sentinel --name=valkey-sentinel --no-enable --no-start
+	dh_installsystemd --package=valkey-sentinel --name=valkey-sentinel@ --no-enable --no-start
+
+override_dh_auto_test:
+	# Tests are intentionally disabled: the upstream test suite requires
+	# a running valkey-server instance and network access, which are not
+	# available in a clean dpkg-buildpackage environment.

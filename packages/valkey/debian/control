@@ -1,0 +1,72 @@
+Source: valkey
+Section: database
+Priority: optional
+Maintainer: community-pkgs <https://github.com/community-pkgs/packages>
+Build-Depends:
+ debhelper-compat (= 13),
+ jq,
+ libhiredis-dev,
+ libibverbs-dev [linux-any],
+ libjemalloc-dev [linux-any],
+ liblua5.1-dev,
+ liblzf-dev,
+ librdmacm-dev [linux-any],
+ libssl-dev,
+ libsystemd-dev,
+ lua-bitop-dev,
+ lua-cjson-dev,
+ rdma-core [linux-any],
+ zlib1g-dev,
+ openssl <!nocheck>,
+ pkgconf,
+ procps <!nocheck>,
+ tcl <!nocheck>,
+ tcl-tls <!nocheck>,
+Standards-Version: 4.7.2
+Homepage: https://valkey.io
+
+
+Package: valkey-server
+Architecture: any
+Pre-Depends:
+ ${misc:Pre-Depends},
+Depends:
+ adduser,
+ valkey-tools (= ${binary:Version}),
+ ${misc:Depends},
+Recommends: logrotate
+Description: Persistent key-value database with network interface (server)
+ Valkey is an advanced key-value store. It is often referred to as a data
+ structure server since keys can contain strings, hashes, lists, sets and
+ sorted sets.
+ .
+ This package contains the Valkey server.
+
+Package: valkey-sentinel
+Architecture: any
+Pre-Depends:
+ ${misc:Pre-Depends},
+Depends:
+ adduser,
+ valkey-tools (= ${binary:Version}),
+ ${misc:Depends},
+Description: Persistent key-value database with network interface (sentinel)
+ Valkey Sentinel provides high availability for Valkey. It monitors Valkey
+ instances and automatically performs failover.
+ .
+ This package contains the Valkey Sentinel daemon.
+
+Package: valkey-tools
+Architecture: any
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+Suggests:
+ ruby-redis,
+Description: Persistent key-value database with network interface (client tools)
+ Valkey is an advanced key-value store. It is often referred to as a data
+ structure server since keys can contain strings, hashes, lists, sets and
+ sorted sets.
+ .
+ This package contains supporting administrative tools: valkey-cli,
+ valkey-benchmark, valkey-check-aof, and valkey-check-rdb.
