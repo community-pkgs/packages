@@ -221,13 +221,28 @@ log "Overall latest tag: $latest_tag"
 
 # ── Compare with state ────────────────────────────────────────────────────────
 
-if [[ "$ALWAYS_BUILD" == "true" ]]; then
-    log "ALWAYS_BUILD=true — treating all latest versions as new"
-    new_releases="$(echo "$latest_per_major_json" | jq -c '[.[] | {tag: .tag, major: .major}]')"
-else
-    state="$(load_state)"
-    log "Current state: $state"
+state="$(load_state)"
+log "Current state: $state"
 
+if [[ "$ALWAYS_BUILD" == "true" ]]; then
+    # Rebuild only majors that are already tracked in the state file (i.e. have
+    # previously been built and deployed).  This prevents accidentally building
+    # a brand-new major that was never part of the repository just because it
+    # appeared on GitHub.  If the state is empty (very first run) we fall back
+    # to all latest versions from GitHub so the repo can be seeded.
+    state_count="$(echo "$state" | jq 'length')"
+    if [[ "$state_count" -gt 0 ]]; then
+        log "ALWAYS_BUILD=true — rebuilding ${state_count} state-tracked major(s)"
+        new_releases="$(
+            echo "$latest_per_major_json" | jq -c \
+                --argjson state "$state" \
+                '[.[] | select($state[.major] != null) | {tag: .tag, major: .major}]'
+        )"
+    else
+        log "ALWAYS_BUILD=true — state is empty, seeding from GitHub"
+        new_releases="$(echo "$latest_per_major_json" | jq -c '[.[] | {tag: .tag, major: .major}]')"
+    fi
+else
     # Select only those majors whose latest tag differs from the stored tag.
     new_releases="$(
         echo "$latest_per_major_json" | jq -c \
@@ -253,10 +268,18 @@ fi
 has_new="false"
 [[ "$(echo "$new_releases" | jq 'length')" -gt 0 ]] && has_new="true"
 
-# all_releases: every active major version (not just new ones this run).
-# Derived from latest_per_major_json which already reflects the current state
-# on GitHub — this is the authoritative source for the index.html display.
-all_releases="$(echo "$latest_per_major_json" | jq -c '[.[] | {tag: .tag, major: .major}]')"
+# all_releases: versions actually present in the APT repository.
+# Derived from the state (previously deployed) merged with new_releases (being
+# deployed now), so index.html never lists versions that were never built.
+all_releases="$(
+    jq -cn \
+        --argjson state "$state" \
+        --argjson new "$new_releases" \
+        '($state | to_entries | map({major: .key, tag: .value})) + $new
+         | group_by(.major)
+         | map(sort_by(.tag | split(".") | map(tonumber)) | last)
+         | sort_by(.major | tonumber) | reverse'
+)"
 
 emit_output "has_new"      "$has_new"
 emit_output "new_releases" "$new_releases"
