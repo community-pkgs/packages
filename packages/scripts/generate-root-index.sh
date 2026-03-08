@@ -264,8 +264,7 @@ cat > "$tmp" <<HTML
     <hr class="divider" />
 
     <p class="footer">
-      Built on ${BUILD_DATE}<br />
-      Maintained by <a href="mailto:${MAINTAINER_EMAIL}">${MAINTAINER_EMAIL}</a>
+      Maintained by <a href="https://github.com/community-pkgs/packages">community-pkgs</a>
     </p>
 
   </main>
