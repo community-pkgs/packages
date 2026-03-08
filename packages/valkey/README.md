@@ -13,8 +13,10 @@ via GitHub Pages.
 
 | Distribution | Codename | Architecture |
 | ------------ | -------- | ------------ |
-| Debian 13 | `trixie` | `amd64` |
-| Ubuntu 24.04 LTS | `noble` | `amd64` |
+| Debian 13 | `trixie` | `amd64`, `arm64` |
+| Debian 12 | `bookworm` | `amd64`, `arm64` |
+| Ubuntu 24.04 LTS | `noble` | `amd64`, `arm64` |
+| Ubuntu 22.04 LTS | `jammy` | `amd64`, `arm64` |
 
 ---
 
@@ -29,8 +31,6 @@ via GitHub Pages.
 ---
 
 ## Installation
-
-Replace `<PAGES_URL>` with the actual APT repository URL (e.g. `https://username.github.io/repo`).
 
 ### 1. Add the GPG signing key
 
@@ -58,7 +58,7 @@ The Debian/Ubuntu distribution codename is used as the APT component and is inse
 Example:
 
 ```sh
-echo "deb [signed-by=/etc/apt/keyrings/valkey.gpg] https://<PAGES_URL> valkey9 $(. /etc/os-release && echo "$VERSION_CODENAME")" | sudo tee /etc/apt/sources.list.d/valkey.list
+echo "deb [signed-by=/etc/apt/keyrings/valkey.gpg] https://https://community-pkgs.github.io/packages valkey9 $(. /etc/os-release && echo "$VERSION_CODENAME")" | sudo tee /etc/apt/sources.list.d/valkey.list
 ```
 
 This means:

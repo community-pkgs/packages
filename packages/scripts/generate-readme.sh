@@ -135,8 +135,8 @@ current_image=""
 while IFS= read -r line; do
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
 
-    # Any top/job-level key resets state to avoid picking up duplicate sections.
-    if [[ "$line" =~ ^[[:space:]]{0,4}[a-zA-Z_][a-zA-Z0-9_-]*:[[:space:]]*$ ]]; then
+    # Any key resets state to avoid picking up duplicate sections.
+    if [[ "$line" =~ ^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_-]*:[[:space:]]*$ ]]; then
         case "$line" in
             *'os:'   ) in_os=1; in_arch=0; continue ;;
             *'arch:' ) in_os=0; in_arch=1; continue ;;
