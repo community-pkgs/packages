@@ -18,7 +18,7 @@ Build-Depends:
  rdma-core [linux-any],
  zlib1g-dev,
  openssl <!nocheck>,
- pkgconf,
+ pkg-config | pkgconf,
  procps <!nocheck>,
  tcl <!nocheck>,
  tcl-tls <!nocheck>,
