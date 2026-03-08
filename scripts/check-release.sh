@@ -164,14 +164,34 @@ if [[ -n "$FORCE_TAG" ]]; then
 
     new_releases="[{\"tag\":\"${FORCE_TAG}\",\"major\":\"${MAJOR}\"}]"
 
-    # In FORCE_TAG mode we skip the full API call, so all_releases equals
-    # the single forced entry.  A subsequent scheduled run will restore the
-    # full picture once latest_per_major is fetched normally.
+    # Build all_releases from the deployed-state file merged with the forced tag.
+    # This ensures index.html shows only versions that are actually present in the
+    # APT repository (tracked by STATE_FILE), not every tag that exists on GitHub.
+    state="$(load_state)"
+    all_releases="$(
+        jq -cn \
+            --argjson state "$state" \
+            --arg major "$MAJOR" \
+            --arg tag "$FORCE_TAG" \
+            '($state | to_entries | map({major: .key, tag: .value}))
+             + [{major: $major, tag: $tag}]
+             | group_by(.major)
+             | map(sort_by(.tag | split(".") | map(tonumber)) | last)
+             | sort_by(.major | tonumber) | reverse'
+    )"
+
+    # Overall highest version tag across all known deployed majors.
+    latest_tag="$(echo "$all_releases" | jq -r '
+        [.[].tag]
+        | sort_by(split(".") | map(tonumber))
+        | last
+    ')"
+
     emit_output "has_new"      "true"
     emit_output "new_releases" "$new_releases"
-    emit_output "all_releases" "$new_releases"
-    emit_output "latest_tag"   "$FORCE_TAG"
-    log "Done — has_new=true new_releases=${new_releases} all_releases=${new_releases} latest_tag=${FORCE_TAG}"
+    emit_output "all_releases" "$all_releases"
+    emit_output "latest_tag"   "$latest_tag"
+    log "Done — has_new=true new_releases=${new_releases} all_releases=${all_releases} latest_tag=${latest_tag}"
     exit 0
 fi
 
