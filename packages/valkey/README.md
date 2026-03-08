@@ -36,14 +36,13 @@ Replace `<PAGES_URL>` with the actual APT repository URL (e.g. `https://username
 
 ```sh
 sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://<PAGES_URL>/public.asc \
-  | sudo gpg --dearmor -o /etc/apt/keyrings/valkey.gpg
+curl -fsSL https://github.com/community-pkgs/packages/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/valkey.gpg
 ```
 
 ### 2. Add the repository
 
 ```sh
-echo "deb [signed-by=/etc/apt/keyrings/valkey.gpg] https://<PAGES_URL> valkey9 $(. /etc/os-release && echo "$VERSION_CODENAME")" | sudo tee /etc/apt/sources.list.d/valkey.list
+echo "deb [signed-by=/etc/apt/keyrings/valkey.gpg] https://github.com/community-pkgs/packages valkey9 $(. /etc/os-release && echo "$VERSION_CODENAME")" | sudo tee /etc/apt/sources.list.d/valkey.list
 ```
 
 > **Note:** The suite name (`valkey9`, `valkey8`, …) reflects the Valkey **major version**.

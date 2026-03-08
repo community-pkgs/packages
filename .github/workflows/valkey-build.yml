@@ -71,13 +71,15 @@ jobs:
         os:
           - image: "debian:13"
             codename: "trixie"
-          # - image: "debian:12"
-          #   codename: "bookworm"
+          - image: "debian:12"
+            codename: "bookworm"
           - image: "ubuntu:24.04"
             codename: "noble"
+          - image: "ubuntu:22.04"
+            codename: "jammy"
         arch:
           - amd64
-          # - arm64
+          - arm64
 
     steps:
       - name: Checkout repository
