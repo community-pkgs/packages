@@ -305,10 +305,17 @@ for idx_component in "${components[@]}"; do
             continue
         fi
 
-        # Skip if already indexed
+        # Skip if ANY version of this package is already indexed for this
+        # component.  Checking only for the exact pool_ver is not sufficient:
+        # when a FORCE_TAG build installs an older version (e.g. 7.2.11 while
+        # 7.2.12 is in the pool), the exact-version check would find 7.2.12
+        # missing from the index and re-include it, evicting the just-installed
+        # 7.2.11 and removing it from the pool.  Skipping whenever any version
+        # is already present prevents this replacement cycle while still
+        # restoring packages that are completely absent from the index.
         if reprepro -b "$REPO_DIR" --component "$idx_component" \
                 list "$REPO_CODENAME" "$pool_pkg" 2>/dev/null \
-                | grep -qF "$pool_ver"; then
+                | grep -q .; then
             continue
         fi
 
