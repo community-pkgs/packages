@@ -235,16 +235,18 @@ render_distribution_block \
 
 compose_distributions_file
 
-# First pass: remove any existing package versions that we are about to
-# (re-)include.  This is necessary when the same upstream version is rebuilt
-# without a version bump — the new .deb will have different checksums and
-# reprepro refuses to overwrite pool files that differ.
+# Include packages while preserving all existing versions in the index.
 #
-# Sequence that avoids the conflict:
-#   1. reprepro remove  → drops the package from the index
-#   2. reprepro deleteunreferenced → purges the now-orphaned file from pool/
-#   3. reprepro includedeb → adds the freshly built file
-log "Removing pre-existing packages to prevent checksum conflicts on rebuild..."
+# The only case requiring removal first is a same-version rebuild: when the
+# same package+version is already indexed but with a different checksum,
+# reprepro refuses to overwrite it.  We handle that with removefilter (which
+# removes only that specific version, leaving other versions intact) followed
+# by deleteunreferenced to purge only the stale pool file.
+#
+# All other versions already in the index are left untouched, so users can
+# still install older releases with apt install pkg=old_version.
+
+log "Including packages (preserving existing versions in index)..."
 for i in "${!artifact_dirs[@]}"; do
     artifact_dir="${artifact_dirs[$i]}"
     component="${artifact_components[$i]}"
@@ -255,27 +257,66 @@ for i in "${!artifact_dirs[@]}"; do
 
     for deb in "${debs[@]}"; do
         pkg="$(dpkg-deb --field "$deb" Package)"
-        if reprepro -b "$REPO_DIR" --component "$component" list "$REPO_CODENAME" "$pkg" 2>/dev/null | grep -q .; then
-            log "Removing ${pkg} from ${REPO_CODENAME}/${component}"
-            reprepro -b "$REPO_DIR" --component "$component" remove "$REPO_CODENAME" "$pkg"
+        new_ver="$(dpkg-deb --field "$deb" Version)"
+
+        # Check whether this exact version is already in the index.
+        if reprepro -b "$REPO_DIR" --component "$component" \
+                list "$REPO_CODENAME" "$pkg" 2>/dev/null \
+                | grep -qF "$new_ver"; then
+            # Same-version rebuild: remove only this version so the new .deb
+            # (potentially with a different checksum) can be added cleanly.
+            # removefilter removes only the matching version; all others stay.
+            log "Same-version rebuild: removing $pkg $new_ver from ${REPO_CODENAME}/${component}"
+            reprepro -b "$REPO_DIR" --component "$component" \
+                removefilter "$REPO_CODENAME" "Package (= ${pkg}), Version (= ${new_ver})"
+            reprepro -b "$REPO_DIR" deleteunreferenced
         fi
+
+        log "Including $pkg $new_ver into ${REPO_CODENAME}/${component}"
+        reprepro -b "$REPO_DIR" --component "$component" includedeb "$REPO_CODENAME" "$deb"
     done
 done
 
-log "Purging unreferenced pool files..."
-reprepro -b "$REPO_DIR" deleteunreferenced
+# Re-index any .deb files present in the pool that are not yet referenced by
+# the current REPO_CODENAME suite.  This restores versions that were previously
+# dropped from the index (e.g. due to out-of-order manual builds) without
+# requiring a fresh CI run for each old version.
+#
+# Guards:
+#   - Iterates over every component that belongs to this suite (not just the
+#     last one from the artifact loop above).
+#   - Only considers .deb files whose upstream major version matches the suite
+#     major (e.g. pool files with version 8.x are never added to valkey9).
+log "Re-indexing unreferenced pool files for ${REPO_CODENAME}..."
+suite_major="${REPO_CODENAME#valkey}"   # "9" from "valkey9"
 
-# Second pass: include the new packages.
-for i in "${!artifact_dirs[@]}"; do
-    artifact_dir="${artifact_dirs[$i]}"
-    component="${artifact_components[$i]}"
+for idx_component in "${components[@]}"; do
+    pool_component_dir="${REPO_DIR}/pool/${idx_component}"
+    [[ -d "$pool_component_dir" ]] || continue
 
-    shopt -s nullglob
-    debs=( "$artifact_dir"/*.deb )
-    shopt -u nullglob
+    while IFS= read -r pool_deb; do
+        pool_pkg="$(dpkg-deb --field "$pool_deb" Package 2>/dev/null)" || continue
+        pool_ver="$(dpkg-deb --field "$pool_deb" Version 2>/dev/null)" || continue
 
-    log "Including ${#debs[@]} deb(s) into ${REPO_CODENAME}/${component}"
-    reprepro -b "$REPO_DIR" --component "$component" includedeb "$REPO_CODENAME" "${debs[@]}"
+        # Skip if the major version doesn't match the suite
+        # e.g. "9.0.3-1~noble" → major "9"
+        pool_major="${pool_ver%%.*}"
+        if [[ "$pool_major" != "$suite_major" ]]; then
+            continue
+        fi
+
+        # Skip if already indexed
+        if reprepro -b "$REPO_DIR" --component "$idx_component" \
+                list "$REPO_CODENAME" "$pool_pkg" 2>/dev/null \
+                | grep -qF "$pool_ver"; then
+            continue
+        fi
+
+        log "Re-indexing $pool_pkg $pool_ver ($idx_component) from pool"
+        reprepro -b "$REPO_DIR" --component "$idx_component" \
+            includedeb "$REPO_CODENAME" "$pool_deb" 2>/dev/null || \
+            log "WARNING: could not re-index $pool_deb (skipping)"
+    done < <(find "$pool_component_dir" -name '*.deb' | sort -V)
 done
 
 # Re-export all codenames, not just REPO_CODENAME, so that pre-existing suites

@@ -130,28 +130,8 @@ jobs:
       LATEST_TAG: ${{ needs.check-release.outputs.latest_tag }}
 
     steps:
-      - name: Check if apt branch exists
-        id: apt-branch
-        run: |
-          if git ls-remote --heads "https://github.com/${{ github.repository }}.git" apt | grep -q 'refs/heads/apt'; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Checkout existing apt branch
-        if: steps.apt-branch.outputs.exists == 'true'
-        uses: actions/checkout@v4
-        with:
-          ref: apt
-          path: repo
-
-      - name: Initialize repo directory when apt branch is missing
-        if: steps.apt-branch.outputs.exists != 'true'
-        run: mkdir -p repo
 
       - name: Set up reprepro
         run: |
@@ -171,17 +151,11 @@ jobs:
           echo "$GPG_PRIVATE_KEY" | base64 --decode | gpg --batch --yes --import
           gpg --list-secret-keys --fingerprint
 
-          PUBLIC_ASC="repo/public.asc"
           if ! gpg --list-keys "$GPG_KEY_ID" > /dev/null 2>&1; then
             echo "Error: Key $GPG_KEY_ID not found after import!"
             exit 1
           fi
-          if [ ! -f "$PUBLIC_ASC" ]; then
-            gpg --armor --export "$GPG_KEY_ID" > "$PUBLIC_ASC"
-            echo "Generated public.asc for key $GPG_KEY_ID"
-          else
-            echo "public.asc already exists, skipping generation"
-          fi
+          echo "GPG key $GPG_KEY_ID imported successfully (public.asc is generated inside the deploy loop)"
 
       - name: Download all packages artifacts
         uses: actions/download-artifact@v4
@@ -189,76 +163,108 @@ jobs:
           pattern: packages-*
           path: ./downloaded-artifacts
 
-      - name: Assemble APT repository
+      - name: Assemble, generate and deploy APT repository
+        env:
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
         run: |
-          echo "$NEW_RELEASES" | jq -c '.[]' | while IFS= read -r release; do
-            TAG="$(echo "$release" | jq -r '.tag')"
-            MAJOR="$(echo "$release" | jq -r '.major')"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-            echo "--- Assembling valkey${MAJOR} for release ${TAG} ---"
+          MAX_ATTEMPTS=5
 
-            REPO_DIR="repo" \
-            ARTIFACTS_DIR="./downloaded-artifacts" \
-            RELEASE_TAG_FILTER="${TAG}" \
-            REPO_CODENAME="valkey${MAJOR}" \
-            REPO_ORIGIN="Valkey APT Repository" \
-            REPO_LABEL="Valkey" \
-            REPO_DESCRIPTION="Valkey APT Repository" \
-            GPG_KEY_ID="${GPG_KEY_ID}" \
-            bash scripts/assemble-apt-repo.sh
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            echo "=== Attempt ${attempt}/${MAX_ATTEMPTS} ==="
+
+            # ── Checkout the freshest apt branch state ───────────────────
+            rm -rf repo
+            if git ls-remote --exit-code --heads origin apt >/dev/null 2>&1; then
+              git fetch origin apt
+              git worktree add repo origin/apt
+            else
+              git worktree add --orphan -b apt repo
+            fi
+
+            # ── Ensure public.asc is present ─────────────────────────────
+            if [[ ! -f repo/public.asc ]]; then
+              gpg --armor --export "$GPG_KEY_ID" > repo/public.asc
+              echo "Generated public.asc"
+            fi
+
+            # ── Assemble reprepro ─────────────────────────────────────────
+            echo "$NEW_RELEASES" | jq -c '.[]' | while IFS= read -r release; do
+              TAG="$(echo "$release"   | jq -r '.tag')"
+              MAJOR="$(echo "$release" | jq -r '.major')"
+              echo "--- Assembling valkey${MAJOR} for release ${TAG} ---"
+              REPO_DIR="repo" \
+              ARTIFACTS_DIR="./downloaded-artifacts" \
+              RELEASE_TAG_FILTER="${TAG}" \
+              REPO_CODENAME="valkey${MAJOR}" \
+              REPO_ORIGIN="Valkey APT Repository" \
+              REPO_LABEL="Valkey" \
+              REPO_DESCRIPTION="Valkey APT Repository" \
+              GPG_KEY_ID="${GPG_KEY_ID}" \
+              bash scripts/assemble-apt-repo.sh
+            done
+
+            # ── Generate index.html ───────────────────────────────────────
+            BUILD_DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
+
+            PROJECT_NAME="Valkey" \
+            PROJECT_SLUG="valkey" \
+            PROJECT_UPSTREAM_URL="https://github.com/valkey-io/valkey" \
+            PROJECT_README_URL="${REPO_URL}/blob/main/packages/valkey/README.md" \
+            PROJECT_LOGO_PATH="packages/valkey/logo.svg" \
+            REPO_URL="${REPO_URL}" \
+            PAGES_URL="${PAGES_URL}" \
+            APT_BRANCH_URL="${REPO_URL}/tree/apt" \
+            RELEASES_JSON="${ALL_RELEASES}" \
+            APT_SUITE_PREFIX="valkey" \
+            APT_DEFAULT_COMPONENT="<CODENAME>" \
+            APT_INSTALL_PACKAGE="valkey-server" \
+            MAINTAINER_EMAIL="packages@bil.co.ua" \
+            OUTPUT_PATH="./repo/valkey/index.html" \
+            BUILD_DATE="${BUILD_DATE}" \
+            bash scripts/generate-apt-index.sh
+
+            # ── Generate root index.html ──────────────────────────────────
+            REPO_TITLE="APT Package Repository" \
+            REPO_DESCRIPTION="Unofficial Debian/Ubuntu packages built automatically from upstream releases." \
+            REPO_URL="${REPO_URL}" \
+            PAGES_URL="${PAGES_URL}" \
+            MAINTAINER_EMAIL="packages@bil.co.ua" \
+            OUTPUT_PATH="./repo/index.html" \
+            BUILD_DATE="${BUILD_DATE}" \
+            bash scripts/generate-root-index.sh \
+              "valkey|Valkey|High-performance in-memory data store (Redis fork)"
+
+            # ── Commit ────────────────────────────────────────────────────
+            cd repo
+            git add -A
+            if git diff --cached --quiet; then
+              echo "Nothing to commit."
+              cd ..
+              git worktree remove repo --force
+              break
+            fi
+            git commit -m "Update APT repo for Valkey ${LATEST_TAG}"
+
+            # ── Push (non-force) ──────────────────────────────────────────
+            if git push origin HEAD:apt; then
+              echo "✓ Deployed on attempt ${attempt}"
+              cd ..
+              git worktree remove repo --force
+              break
+            fi
+
+            echo "Push rejected — another job pushed concurrently. Retrying..."
+            cd ..
+            git worktree remove repo --force
+
+            if [[ $attempt -eq $MAX_ATTEMPTS ]]; then
+              echo "ERROR: Failed to deploy after ${MAX_ATTEMPTS} attempts"
+              exit 1
+            fi
+
+            sleep $((attempt * 10))
           done
-
-      - name: Generate index.html
-        run: |
-          REPO_URL="${{ github.server_url }}/${{ github.repository }}"
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          PAGES_URL="https://${{ github.repository_owner }}.github.io/${REPO_NAME}"
-          BUILD_DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
-
-          # ALL_RELEASES is already the authoritative list: deployed versions
-          # (read from the apt branch by check-release.sh) merged with the
-          # versions being built this run.  Use it directly.
-          RELEASES_JSON="${ALL_RELEASES}"
-
-          PROJECT_NAME="Valkey" \
-          PROJECT_SLUG="valkey" \
-          PROJECT_UPSTREAM_URL="https://github.com/valkey-io/valkey" \
-          PROJECT_README_URL="${REPO_URL}/blob/main/packages/valkey/README.md" \
-          PROJECT_LOGO_PATH="packages/valkey/logo.svg" \
-          REPO_URL="${REPO_URL}" \
-          PAGES_URL="${PAGES_URL}" \
-          APT_BRANCH_URL="${REPO_URL}/tree/apt" \
-          RELEASES_JSON="${RELEASES_JSON}" \
-          APT_SUITE_PREFIX="valkey" \
-          APT_DEFAULT_COMPONENT="<CODENAME>" \
-          APT_INSTALL_PACKAGE="valkey-server" \
-          MAINTAINER_EMAIL="packages@bil.co.ua" \
-          OUTPUT_PATH="./repo/valkey/index.html" \
-          BUILD_DATE="${BUILD_DATE}" \
-          bash scripts/generate-apt-index.sh
-
-      - name: Generate root index.html
-        run: |
-          REPO_URL="${{ github.server_url }}/${{ github.repository }}"
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          PAGES_URL="https://${{ github.repository_owner }}.github.io/${REPO_NAME}"
-          BUILD_DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
-
-          REPO_TITLE="APT Package Repository" \
-          REPO_DESCRIPTION="Unofficial Debian/Ubuntu packages built automatically from upstream releases." \
-          REPO_URL="${REPO_URL}" \
-          PAGES_URL="${PAGES_URL}" \
-          MAINTAINER_EMAIL="packages@bil.co.ua" \
-          OUTPUT_PATH="./repo/index.html" \
-          BUILD_DATE="${BUILD_DATE}" \
-          bash scripts/generate-root-index.sh \
-            "valkey|Valkey|High-performance in-memory data store (Redis fork)"
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./repo
-          publish_branch: apt
-          keep_files: true
-          commit_message: "Update APT repo for Valkey ${{ needs.check-release.outputs.latest_tag }}"
