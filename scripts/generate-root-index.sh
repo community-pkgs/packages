@@ -264,7 +264,7 @@ cat > "$tmp" <<HTML
     <hr class="divider" />
 
     <p class="footer">
-      Maintained by <a href="https://github.com/community-pkgs/packages">community-pkgs</a>
+      Maintained by <a href="mailto:${MAINTAINER_EMAIL}">${MAINTAINER_EMAIL}</a>
     </p>
 
   </main>

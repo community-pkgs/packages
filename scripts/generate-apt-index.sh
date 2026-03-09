@@ -24,7 +24,7 @@
 #   PROJECT_README_URL     e.g. "https://github.com/owner/repo/blob/main/packages/valkey/README.md"
 #   APT_BRANCH_URL         e.g. "https://github.com/owner/repo/tree/apt"
 #   APT_SUITE_PREFIX       e.g. "valkey" -> produces suite "valkey9"
-#   APT_DEFAULT_COMPONENT  e.g. "<CODENAME>" / "stable" / "main"
+
 #   APT_INSTALL_PACKAGE    e.g. "valkey-server"
 #   PROJECT_LOGO_PATH      e.g. "packages/valkey/logo.svg"
 #                          Path to a square SVG logo for the package.
@@ -63,7 +63,7 @@ if [[ -z "${RELEASES_JSON:-}" ]]; then
 fi
 
 : "${APT_SUITE_PREFIX:=$PROJECT_SLUG}"
-: "${APT_DEFAULT_COMPONENT:=<CODENAME>}"
+
 : "${APT_INSTALL_PACKAGE:=${PROJECT_SLUG}-server}"
 
 # Validate that RELEASES_JSON is a non-empty array.
@@ -223,8 +223,6 @@ ${_logo_css}
 
 ${_tab_css_rules}
     .tabs-container { margin-bottom: 0.25rem; }
-
-    .tabs-wrapper {}
 
     .tab-bar {
       display: flex;

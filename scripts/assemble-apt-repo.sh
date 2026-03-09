@@ -1,60 +1,39 @@
 #!/usr/bin/env bash
 # assemble-apt-repo.sh
 #
-# Assemble a signed APT repository from downloaded .deb artifacts using reprepro.
+# Assemble a signed APT repository from downloaded .deb artifacts.
 #
-# This script keeps reprepro distribution metadata in two layers:
-#   1. conf/distributions.d/<codename>
-#      One generated block per published codename / major channel.
-#   2. conf/distributions
-#      Final file composed from all files in distributions.d/.
+# Uses dpkg-scanpackages --multiversion to generate Packages files that include
+# ALL versions of each package, so users can install any specific version with:
+#   apt install valkey-server=7.2.11-1~noble
 #
-# This avoids in-place block editing of conf/distributions and makes each
-# codename's metadata easy to inspect and regenerate independently.
+# Pool layout:
+#   <REPO_DIR>/pool/<component>/v/<project_slug>/<package>_<version>_<arch>.deb
 #
-# Expected artifact naming convention:
-#   packages-<component>-<arch>
-#
-# When RELEASE_TAG_FILTER is set, artifacts are expected to be named:
-#   packages-<release_tag>-<component>-<arch>
-# Only artifacts matching that release tag are processed, and the tag prefix
-# is stripped before the component/arch are parsed.
-#
-# In the current repository layout:
-# - component = distro codename (e.g. noble, trixie)
-# - suite/codename = product major channel (e.g. valkey9)
+# Dist layout:
+#   <REPO_DIR>/dists/<suite>/<component>/binary-<arch>/Packages
+#   <REPO_DIR>/dists/<suite>/<component>/binary-<arch>/Packages.gz
+#   <REPO_DIR>/dists/<suite>/<component>/binary-<arch>/Packages.xz
+#   <REPO_DIR>/dists/<suite>/Release
+#   <REPO_DIR>/dists/<suite>/Release.gpg
+#   <REPO_DIR>/dists/<suite>/InRelease
 #
 # Required environment variables:
-#   REPO_DIR            Repository root directory to populate (e.g. repo)
+#   REPO_DIR            Repository root directory (e.g. repo)
 #   ARTIFACTS_DIR       Directory containing downloaded artifact subdirectories
-#   REPO_CODENAME       Reprepro Codename/Suite to publish into (e.g. valkey9)
-#   REPO_ORIGIN         Origin field for reprepro distributions
-#   REPO_LABEL          Label field for reprepro distributions
-#   REPO_DESCRIPTION    Description field for reprepro distributions
-#   GPG_KEY_ID          GPG key ID/fingerprint used by reprepro SignWith
+#   REPO_CODENAME       Suite/Codename to publish into (e.g. valkey9)
+#   REPO_ORIGIN         Origin field in Release
+#   REPO_LABEL          Label field in Release
+#   REPO_DESCRIPTION    Description field in Release
+#   GPG_KEY_ID          GPG key ID used for signing
 #
 # Optional environment variables:
-#   REPO_SUITE          Suite field in reprepro distributions (default: stable)
-#   DISTRIBUTIONS_DIR   Path to per-codename metadata directory
-#                       (default: <REPO_DIR>/conf/distributions.d)
-#   DISTRIBUTIONS_FILE  Path to final conf/distributions file
-#                       (default: <REPO_DIR>/conf/distributions)
-#   ARTIFACT_NAME_PREFIX  Prefix for artifact directories (default: packages)
-#   RELEASE_TAG_FILTER    When set, only process artifacts whose name contains
-#                         this release tag after the prefix, and strip it before
-#                         parsing the component and arch.
-#                         Example: RELEASE_TAG_FILTER=9.0.3 processes
-#                         packages-9.0.3-noble-amd64 as component=noble arch=amd64
-#
-# Example:
-#   REPO_DIR=repo \
-#   ARTIFACTS_DIR=./downloaded-artifacts \
-#   REPO_CODENAME=valkey9 \
-#   REPO_ORIGIN="Valkey APT Repository" \
-#   REPO_LABEL="Valkey" \
-#   REPO_DESCRIPTION="Valkey APT Repository" \
-#   GPG_KEY_ID="$GPG_KEY_ID" \
-#   scripts/assemble-apt-repo.sh
+#   REPO_SUITE          Suite field in Release (default: stable)
+#   ARTIFACT_NAME_PREFIX  Prefix for artifact dirs (default: packages)
+#   RELEASE_TAG_FILTER    When set, only process artifact dirs whose name
+#                         contains this tag after the prefix, and strip it
+#                         before parsing component and arch.
+#   PROJECT_SLUG        Subdirectory name under pool/<component>/ (default: valkey)
 
 set -euo pipefail
 
@@ -67,112 +46,35 @@ REPO_DESCRIPTION="${REPO_DESCRIPTION:?ERROR: REPO_DESCRIPTION is required}"
 GPG_KEY_ID="${GPG_KEY_ID:?ERROR: GPG_KEY_ID is required}"
 
 REPO_SUITE="${REPO_SUITE:-stable}"
-DISTRIBUTIONS_DIR="${DISTRIBUTIONS_DIR:-${REPO_DIR}/conf/distributions.d}"
-DISTRIBUTIONS_FILE="${DISTRIBUTIONS_FILE:-${REPO_DIR}/conf/distributions}"
 ARTIFACT_NAME_PREFIX="${ARTIFACT_NAME_PREFIX:-packages}"
 RELEASE_TAG_FILTER="${RELEASE_TAG_FILTER:-}"
+PROJECT_SLUG="${PROJECT_SLUG:-valkey}"
 
-log() {
-    printf '[assemble-apt-repo] %s\n' "$*" >&2
-}
+log() { printf '[assemble-apt-repo] %s\n' "$*" >&2; }
+die() { printf '[assemble-apt-repo] ERROR: %s\n' "$*" >&2; exit 1; }
 
-die() {
-    printf '[assemble-apt-repo] ERROR: %s\n' "$*" >&2
-    exit 1
-}
+# ── Dependency checks ──────────────────────────────────────────────────────────
 
-contains() {
-    local needle="$1"
-    shift || true
-    local item
+for cmd in dpkg-scanpackages dpkg-deb gzip xz gpg; do
+    command -v "$cmd" >/dev/null 2>&1 || die "'$cmd' is not installed"
+done
 
-    for item in "$@"; do
-        [[ "$item" == "$needle" ]] && return 0
-    done
-
-    return 1
-}
-
-render_distribution_block() {
-    local output_path="$1"
-    local components_line="$2"
-    local architectures_line="$3"
-
-    cat > "$output_path" <<EOF
-Origin: $REPO_ORIGIN
-Label: $REPO_LABEL
-Suite: $REPO_SUITE
-Codename: $REPO_CODENAME
-Components: $components_line
-Architectures: $architectures_line
-Description: $REPO_DESCRIPTION
-SignWith: $GPG_KEY_ID
-EOF
-}
-
-compose_distributions_file() {
-    local tmp_file
-    local first=1
-    local block_file
-
-    tmp_file="$(mktemp)"
-
-    # sort -V ensures deterministic ordering: valkey8 < valkey9 < valkey10.
-    while IFS= read -r block_file; do
-        [[ -f "$block_file" ]] || continue
-
-        if [[ $first -eq 0 ]]; then
-            printf '\n' >> "$tmp_file"
-        fi
-
-        cat "$block_file" >> "$tmp_file"
-        first=0
-    done < <(find "$DISTRIBUTIONS_DIR" -maxdepth 1 -type f | LC_ALL=C sort -V)
-
-    [[ $first -eq 0 ]] || die "No per-codename distribution blocks found in $DISTRIBUTIONS_DIR"
-
-    mv "$tmp_file" "$DISTRIBUTIONS_FILE"
-}
-
-command -v reprepro >/dev/null 2>&1 || die "reprepro is not installed or not in PATH"
 [[ -d "$ARTIFACTS_DIR" ]] || die "ARTIFACTS_DIR does not exist: $ARTIFACTS_DIR"
 
-mkdir -p "${REPO_DIR}/conf" "$DISTRIBUTIONS_DIR"
+# ── Derive suite major (e.g. "7" from "valkey7") ──────────────────────────────
+
+suite_major="${REPO_CODENAME#valkey}"
+[[ "$suite_major" =~ ^[0-9]+$ ]] || die "Cannot derive numeric major from REPO_CODENAME=$REPO_CODENAME"
+
+# ── Step 1: Copy .deb files into the pool ─────────────────────────────────────
+#
+# Pool path: <REPO_DIR>/pool/<component>/v/<slug>/<file>.deb
+# This mirrors the standard Debian pool layout.
+
+log "Copying artifacts into pool for suite ${REPO_CODENAME} (major ${suite_major})..."
 
 components=()
 architectures=()
-artifact_dirs=()
-artifact_components=()
-
-# Read existing architectures and components for this codename from the
-# previously-written per-codename block (present when the apt branch was
-# checked out into REPO_DIR).  We merge them with whatever is found in the
-# current artifacts so that packages for architectures / components that were
-# not built this run are NOT silently dropped from conf/distributions — which
-# would cause reprepro to error with "unused database".
-existing_block="${DISTRIBUTIONS_DIR}/${REPO_CODENAME}"
-if [[ -f "$existing_block" ]]; then
-    while IFS= read -r line; do
-        if [[ "$line" =~ ^Architectures:[[:space:]]*(.+)$ ]]; then
-            read -ra _arches <<< "${BASH_REMATCH[1]}"
-            for _a in "${_arches[@]}"; do
-                if ! contains "$_a" "${architectures[@]}"; then
-                    architectures+=( "$_a" )
-                fi
-            done
-        fi
-        if [[ "$line" =~ ^Components:[[:space:]]*(.+)$ ]]; then
-            read -ra _comps <<< "${BASH_REMATCH[1]}"
-            for _c in "${_comps[@]}"; do
-                if ! contains "$_c" "${components[@]}"; then
-                    components+=( "$_c" )
-                fi
-            done
-        fi
-    done < "$existing_block"
-    log "Loaded existing architectures from $existing_block: ${architectures[*]:-none}"
-    log "Loaded existing components from $existing_block: ${components[*]:-none}"
-fi
 
 for artifact_dir in "${ARTIFACTS_DIR}"/*; do
     [[ -d "$artifact_dir" ]] || continue
@@ -180,27 +82,26 @@ for artifact_dir in "${ARTIFACTS_DIR}"/*; do
     artifact_name="$(basename "$artifact_dir")"
 
     if [[ -n "$RELEASE_TAG_FILTER" ]]; then
-        # When a release tag filter is set, only process artifacts that match
-        # packages-<tag>-<component>-<arch> and strip the tag before parsing.
         if [[ "$artifact_name" != "${ARTIFACT_NAME_PREFIX}-${RELEASE_TAG_FILTER}-"* ]]; then
-            log "Skipping artifact $artifact_name (does not match tag filter $RELEASE_TAG_FILTER)"
+            log "Skipping $artifact_name (tag filter: $RELEASE_TAG_FILTER)"
             continue
         fi
         parse_name="${artifact_name#${ARTIFACT_NAME_PREFIX}-${RELEASE_TAG_FILTER}-}"
-        if [[ "$parse_name" =~ ^(.+)-([^-]+)$ ]]; then
-            component="${BASH_REMATCH[1]}"
-            arch="${BASH_REMATCH[2]}"
-        else
-            die "Unexpected artifact name format after stripping tag: $parse_name (from $artifact_name)"
+    else
+        if [[ "$artifact_name" != "${ARTIFACT_NAME_PREFIX}-"* ]]; then
+            log "Skipping $artifact_name (unexpected name)"
+            continue
         fi
-    elif [[ "$artifact_name" =~ ^${ARTIFACT_NAME_PREFIX}-(.+)-([^-]+)$ ]]; then
+        parse_name="${artifact_name#${ARTIFACT_NAME_PREFIX}-}"
+    fi
+
+    # parse_name is now "<component>-<arch>"
+    if [[ "$parse_name" =~ ^(.+)-([^-]+)$ ]]; then
         component="${BASH_REMATCH[1]}"
         arch="${BASH_REMATCH[2]}"
     else
-        die "Unexpected artifact name format: $artifact_name"
+        die "Cannot parse component/arch from: $parse_name (artifact: $artifact_name)"
     fi
-
-    log "Processing artifact dir=$artifact_dir component=$component arch=$arch"
 
     shopt -s nullglob
     debs=( "$artifact_dir"/*.deb )
@@ -211,127 +112,211 @@ for artifact_dir in "${ARTIFACTS_DIR}"/*; do
         continue
     fi
 
-    artifact_dirs+=( "$artifact_dir" )
-    artifact_components+=( "$component" )
+    pool_dir="${REPO_DIR}/pool/${component}/v/${PROJECT_SLUG}"
+    mkdir -p "$pool_dir"
 
-    if ! contains "$component" "${components[@]}"; then
+    for deb in "${debs[@]}"; do
+        dest="${pool_dir}/$(basename "$deb")"
+        if [[ -f "$dest" ]]; then
+            # Same filename already in pool — compare checksums before overwriting.
+            if sha256sum --quiet --check <(sha256sum "$deb" | sed "s|${deb}|${dest}|") 2>/dev/null; then
+                log "Pool already has $(basename "$deb") (identical), skipping copy"
+                continue
+            fi
+            log "Replacing $(basename "$deb") in pool (checksum differs)"
+        else
+            log "Adding $(basename "$deb") to pool"
+        fi
+        cp "$deb" "$dest"
+    done
+
+    # Track which components and architectures are present.
+    if [[ ! " ${components[*]} " =~ " ${component} " ]]; then
         components+=( "$component" )
     fi
-
-    if ! contains "$arch" "${architectures[@]}"; then
+    if [[ ! " ${architectures[*]} " =~ " ${arch} " ]]; then
         architectures+=( "$arch" )
     fi
 done
 
-[[ ${#artifact_dirs[@]} -gt 0 ]] || die "No package artifacts were included from $ARTIFACTS_DIR"
+# Also discover existing pool directories for this suite so we can rebuild the
+# full index even when only a subset of components/arches was built this run.
+for pool_comp_dir in "${REPO_DIR}/pool"/*/; do
+    [[ -d "$pool_comp_dir" ]] || continue
+    c="$(basename "$pool_comp_dir")"
+    if [[ ! " ${components[*]} " =~ " ${c} " ]]; then
+        components+=( "$c" )
+    fi
+done
 
-components_line="${components[*]}"
-architectures_line="${architectures[*]}"
+[[ ${#components[@]} -gt 0 ]] || die "No components found in pool under $REPO_DIR/pool"
 
-render_distribution_block \
-    "${DISTRIBUTIONS_DIR}/${REPO_CODENAME}" \
-    "$components_line" \
-    "$architectures_line"
+# Discover all architectures from existing pool files if not captured above.
+for pool_comp_dir in "${REPO_DIR}/pool"/*/; do
+    [[ -d "$pool_comp_dir" ]] || continue
+    while IFS= read -r deb; do
+        a="$(dpkg-deb --field "$deb" Architecture 2>/dev/null)" || continue
+        [[ "$a" == "all" ]] && continue
+        if [[ ! " ${architectures[*]} " =~ " ${a} " ]]; then
+            architectures+=( "$a" )
+        fi
+    done < <(find "$pool_comp_dir" -name '*.deb' 2>/dev/null)
+done
 
-compose_distributions_file
+[[ ${#architectures[@]} -gt 0 ]] || die "No architectures discovered"
 
-# Include packages while preserving all existing versions in the index.
+log "Components : ${components[*]}"
+log "Architectures: ${architectures[*]}"
+
+# ── Step 2: Generate Packages files ───────────────────────────────────────────
 #
-# The only case requiring removal first is a same-version rebuild: when the
-# same package+version is already indexed but with a different checksum,
-# reprepro refuses to overwrite it.  We handle that with removefilter (which
-# removes only that specific version, leaving other versions intact) followed
-# by deleteunreferenced to purge only the stale pool file.
-#
-# All other versions already in the index are left untouched, so users can
-# still install older releases with apt install pkg=old_version.
+# For each component × arch, scan the pool and produce a Packages file that
+# includes ONLY packages whose upstream version major matches the suite major.
+# Using --multiversion so all versions are listed (not just the newest).
 
-log "Including packages (preserving existing versions in index)..."
-for i in "${!artifact_dirs[@]}"; do
-    artifact_dir="${artifact_dirs[$i]}"
-    component="${artifact_components[$i]}"
+log "Generating Packages files for suite ${REPO_CODENAME}..."
 
-    shopt -s nullglob
-    debs=( "$artifact_dir"/*.deb )
-    shopt -u nullglob
+for component in "${components[@]}"; do
+    pool_slug_dir="${REPO_DIR}/pool/${component}/v/${PROJECT_SLUG}"
+    [[ -d "$pool_slug_dir" ]] || continue
 
-    for deb in "${debs[@]}"; do
-        pkg="$(dpkg-deb --field "$deb" Package)"
-        new_ver="$(dpkg-deb --field "$deb" Version)"
+    for arch in "${architectures[@]}"; do
+        dist_dir="${REPO_DIR}/dists/${REPO_CODENAME}/${component}/binary-${arch}"
+        mkdir -p "$dist_dir"
 
-        # Check whether this exact version is already in the index.
-        if reprepro -b "$REPO_DIR" --component "$component" \
-                list "$REPO_CODENAME" "$pkg" 2>/dev/null \
-                | grep -qF "$new_ver"; then
-            # Same-version rebuild: remove only this version so the new .deb
-            # (potentially with a different checksum) can be added cleanly.
-            # removefilter removes only the matching version; all others stay.
-            log "Same-version rebuild: removing $pkg $new_ver from ${REPO_CODENAME}/${component}"
-            reprepro -b "$REPO_DIR" --component "$component" \
-                removefilter "$REPO_CODENAME" "Package (= ${pkg}), Version (= ${new_ver})"
-            reprepro -b "$REPO_DIR" deleteunreferenced
+        # Build a temporary directory containing only the .deb files that
+        # belong to this architecture AND this suite's major version.
+        tmp_scan_dir="$(mktemp -d)"
+
+        while IFS= read -r deb; do
+            deb_fields="$(dpkg-deb --field "$deb" Architecture Version 2>/dev/null)" || continue
+            deb_arch="$(awk '/^Architecture:/ {print $2; exit}' <<< "$deb_fields")"
+            deb_ver="$(awk '/^Version:/ {print $2; exit}' <<< "$deb_fields")"
+            [[ -n "$deb_arch" && -n "$deb_ver" ]] || continue
+            [[ "$deb_arch" == "$arch" || "$deb_arch" == "all" ]] || continue
+            # Strip Debian revision to get the upstream version, e.g. "7.2.11-1~noble" → "7.2.11"
+            upstream_ver="${deb_ver%%-*}"
+            deb_major="${upstream_ver%%.*}"
+            [[ "$deb_major" == "$suite_major" ]] || continue
+
+            # Symlink into the temp dir; dpkg-scanpackages will see a flat dir
+            # of symlinks — the Filename: entries are rewritten via sed below.
+            link_name="${tmp_scan_dir}/$(basename "$deb")"
+            ln -sf "$(realpath "$deb")" "$link_name"
+        done < <(find "$pool_slug_dir" -name '*.deb' | sort -V)
+
+        shopt -s nullglob
+        scan_debs=( "$tmp_scan_dir"/*.deb )
+        shopt -u nullglob
+
+        if [[ ${#scan_debs[@]} -eq 0 ]]; then
+            log "No packages for ${component}/binary-${arch} in suite ${REPO_CODENAME}, skipping"
+            rm -rf "$tmp_scan_dir"
+            continue
         fi
 
-        log "Including $pkg $new_ver into ${REPO_CODENAME}/${component}"
-        reprepro -b "$REPO_DIR" --component "$component" includedeb "$REPO_CODENAME" "$deb"
+        log "Scanning ${#scan_debs[@]} package(s) for ${REPO_CODENAME}/${component}/binary-${arch}"
+
+        # dpkg-scanpackages prints Filename relative to the path argument.
+        # We scan a temp dir of symlinks, so we must rewrite Filename: entries
+        # to point at the real pool path.
+        dpkg-scanpackages --multiversion "$tmp_scan_dir" /dev/null 2>/dev/null \
+            | sed "s|Filename: ${tmp_scan_dir}/|Filename: pool/${component}/v/${PROJECT_SLUG}/|g" \
+            > "${dist_dir}/Packages"
+
+        gzip  -9 -k -f "${dist_dir}/Packages"
+        xz    -9 -k -f "${dist_dir}/Packages"
+
+        rm -rf "$tmp_scan_dir"
+        log "Generated ${dist_dir}/Packages ($(wc -l < "${dist_dir}/Packages") lines)"
     done
 done
 
-# Re-index any .deb files present in the pool that are not yet referenced by
-# the current REPO_CODENAME suite.  This restores versions that were previously
-# dropped from the index (e.g. due to out-of-order manual builds) without
-# requiring a fresh CI run for each old version.
-#
-# Guards:
-#   - Iterates over every component that belongs to this suite (not just the
-#     last one from the artifact loop above).
-#   - Only considers .deb files whose upstream major version matches the suite
-#     major (e.g. pool files with version 8.x are never added to valkey9).
-log "Re-indexing unreferenced pool files for ${REPO_CODENAME}..."
-suite_major="${REPO_CODENAME#valkey}"   # "9" from "valkey9"
+# ── Step 3: Generate Release file ─────────────────────────────────────────────
 
-for idx_component in "${components[@]}"; do
-    pool_component_dir="${REPO_DIR}/pool/${idx_component}"
-    [[ -d "$pool_component_dir" ]] || continue
+log "Generating Release file for suite ${REPO_CODENAME}..."
 
-    while IFS= read -r pool_deb; do
-        pool_pkg="$(dpkg-deb --field "$pool_deb" Package 2>/dev/null)" || continue
-        pool_ver="$(dpkg-deb --field "$pool_deb" Version 2>/dev/null)" || continue
+suite_dist_dir="${REPO_DIR}/dists/${REPO_CODENAME}"
+mkdir -p "$suite_dist_dir"
 
-        # Skip if the major version doesn't match the suite
-        # e.g. "9.0.3-1~noble" → major "9"
-        pool_major="${pool_ver%%.*}"
-        if [[ "$pool_major" != "$suite_major" ]]; then
-            continue
+# Build the components and architectures lines from what was actually indexed.
+indexed_components=()
+indexed_architectures=()
+
+for component in "${components[@]}"; do
+    for arch in "${architectures[@]}"; do
+        pkgs_file="${suite_dist_dir}/${component}/binary-${arch}/Packages"
+        [[ -f "$pkgs_file" ]] || continue
+        if [[ ! " ${indexed_components[*]} " =~ " ${component} " ]]; then
+            indexed_components+=( "$component" )
         fi
-
-        # Skip if ANY version of this package is already indexed for this
-        # component.  Checking only for the exact pool_ver is not sufficient:
-        # when a FORCE_TAG build installs an older version (e.g. 7.2.11 while
-        # 7.2.12 is in the pool), the exact-version check would find 7.2.12
-        # missing from the index and re-include it, evicting the just-installed
-        # 7.2.11 and removing it from the pool.  Skipping whenever any version
-        # is already present prevents this replacement cycle while still
-        # restoring packages that are completely absent from the index.
-        if reprepro -b "$REPO_DIR" --component "$idx_component" \
-                list "$REPO_CODENAME" "$pool_pkg" 2>/dev/null \
-                | grep -q .; then
-            continue
+        if [[ ! " ${indexed_architectures[*]} " =~ " ${arch} " ]]; then
+            indexed_architectures+=( "$arch" )
         fi
-
-        log "Re-indexing $pool_pkg $pool_ver ($idx_component) from pool"
-        reprepro -b "$REPO_DIR" --component "$idx_component" \
-            includedeb "$REPO_CODENAME" "$pool_deb" 2>/dev/null || \
-            log "WARNING: could not re-index $pool_deb (skipping)"
-    done < <(find "$pool_component_dir" -name '*.deb' | sort -V)
+    done
 done
 
-# Re-export all codenames, not just REPO_CODENAME, so that pre-existing suites
-# (e.g. valkey8 from a previous run) stay signed with the current key.
-grep '^Codename:' "$DISTRIBUTIONS_FILE" | awk '{print $2}' | while read -r cn; do
-    [[ -n "$cn" ]] || continue
-    log "Exporting $cn"
-    reprepro -b "$REPO_DIR" export "$cn"
+[[ ${#indexed_components[@]} -gt 0 ]] || die "No Packages files were generated for suite ${REPO_CODENAME}"
+
+DATE="$(date -u '+%a, %d %b %Y %H:%M:%S UTC')"
+
+cat > "${suite_dist_dir}/Release" <<EOF
+Origin: ${REPO_ORIGIN}
+Label: ${REPO_LABEL}
+Suite: ${REPO_SUITE}
+Codename: ${REPO_CODENAME}
+Date: ${DATE}
+Architectures: ${indexed_architectures[*]}
+Components: ${indexed_components[*]}
+Description: ${REPO_DESCRIPTION}
+EOF
+
+# Append MD5Sum, SHA1, SHA256, SHA512 checksums of all index files.
+for hash_algo in MD5Sum SHA1 SHA256 SHA512; do
+    case "$hash_algo" in
+        MD5Sum) cmd="md5sum"    ;;
+        SHA1)   cmd="sha1sum"   ;;
+        SHA256) cmd="sha256sum" ;;
+        SHA512) cmd="sha512sum" ;;
+    esac
+
+    printf '%s:\n' "$hash_algo" >> "${suite_dist_dir}/Release"
+
+    for component in "${indexed_components[@]}"; do
+        for arch in "${indexed_architectures[@]}"; do
+            for fname in Packages Packages.gz Packages.xz; do
+                fpath="${suite_dist_dir}/${component}/binary-${arch}/${fname}"
+                [[ -f "$fpath" ]] || continue
+                hash_val="$($cmd "$fpath" | awk '{print $1}')"
+                size="$(wc -c < "$fpath")"
+                rel_path="${component}/binary-${arch}/${fname}"
+                printf ' %s %8d %s\n' "$hash_val" "$size" "$rel_path" \
+                    >> "${suite_dist_dir}/Release"
+            done
+        done
+    done
 done
 
-log "APT repository assembly completed in $REPO_DIR"
+log "Generated ${suite_dist_dir}/Release"
+
+# ── Step 4: Sign Release file ──────────────────────────────────────────────────
+
+log "Signing Release file for suite ${REPO_CODENAME}..."
+
+# Detached signature → Release.gpg
+gpg --batch --yes \
+    --local-user "$GPG_KEY_ID" \
+    --armor --detach-sign \
+    --output "${suite_dist_dir}/Release.gpg" \
+    "${suite_dist_dir}/Release"
+
+# Inline cleartext signature → InRelease
+gpg --batch --yes \
+    --local-user "$GPG_KEY_ID" \
+    --armor --clearsign \
+    --output "${suite_dist_dir}/InRelease" \
+    "${suite_dist_dir}/Release"
+
+log "Signed: Release.gpg and InRelease"
+
+log "APT repository assembly completed for suite ${REPO_CODENAME}"

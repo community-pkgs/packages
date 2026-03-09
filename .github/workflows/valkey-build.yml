@@ -128,15 +128,19 @@ jobs:
       NEW_RELEASES: ${{ needs.check-release.outputs.new_releases }}
       ALL_RELEASES: ${{ needs.check-release.outputs.all_releases }}
       LATEST_TAG: ${{ needs.check-release.outputs.latest_tag }}
+      PROJECT_SLUG: valkey
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up reprepro
+      - name: Set up packaging tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends reprepro
+          sudo apt-get install -y --no-install-recommends \
+            dpkg-dev \
+            xz-utils \
+            gnupg
 
       - name: Import GPG key and generate public.asc
         run: |
@@ -185,6 +189,9 @@ jobs:
               git worktree add --orphan -b apt repo
             fi
 
+            # ── Remove reprepro-specific directories (no longer needed) ──
+            rm -rf repo/conf repo/db
+
             # ── Ensure public.asc is present ─────────────────────────────
             if [[ ! -f repo/public.asc ]]; then
               gpg --armor --export "$GPG_KEY_ID" > repo/public.asc
@@ -204,6 +211,7 @@ jobs:
               REPO_LABEL="Valkey" \
               REPO_DESCRIPTION="Valkey APT Repository" \
               GPG_KEY_ID="${GPG_KEY_ID}" \
+              PROJECT_SLUG="${PROJECT_SLUG}" \
               bash scripts/assemble-apt-repo.sh
             done
 
@@ -220,7 +228,6 @@ jobs:
             APT_BRANCH_URL="${REPO_URL}/tree/apt" \
             RELEASES_JSON="${ALL_RELEASES}" \
             APT_SUITE_PREFIX="valkey" \
-            APT_DEFAULT_COMPONENT="<CODENAME>" \
             APT_INSTALL_PACKAGE="valkey-server" \
             MAINTAINER_EMAIL="packages@bil.co.ua" \
             OUTPUT_PATH="./repo/valkey/index.html" \

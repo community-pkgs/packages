@@ -172,14 +172,14 @@ fetch_latest_per_major() {
 # Strategy:
 #   1. Shallow-fetch the apt branch so git-show can access its tree without a
 #      full clone.  Safe to call even when the branch doesn't exist yet.
-#   2. Parse conf/distributions to discover which valkeyN suites are present.
+#   2. List dists/ in the apt branch to discover which valkeyN suites are present.
 #   3. For each suite read one representative Packages file and extract Version.
 #   4. Strip the Debian revision + distro suffix (e.g. "8.1.6-1~noble" → "8.1.6").
 #
 # Returns an empty array [] gracefully when:
 #   - the apt branch does not exist yet (first ever build)
 #   - the fetch fails for any reason
-#   - conf/distributions is missing or contains no matching suites
+#   - dists/ contains no matching valkey suites
 fetch_deployed_per_major() {
     # Shallow-fetch the apt branch.  --depth=1 is enough to read the tree.
     # Redirect stderr so a missing branch doesn't pollute CI logs with errors.
@@ -189,21 +189,15 @@ fetch_deployed_per_major() {
         return
     fi
 
-    # Read conf/distributions to find all suite (Codename) entries.
-    local distributions
-    if ! distributions="$(git show "origin/${APT_BRANCH}:conf/distributions" 2>/dev/null)"; then
-        log "conf/distributions not found in ${APT_BRANCH} branch"
-        printf '[]'
-        return
-    fi
-
-    # Collect all Codename values that match the pattern valkeyN (N = digits).
+    # Discover which valkeyN suites exist by listing dists/ in the apt branch.
+    # This works both with the old reprepro layout (conf/distributions) and the
+    # new dpkg-scanpackages layout where conf/ no longer exists.
     local codenames
-    codenames="$(printf '%s\n' "$distributions" \
-        | grep '^Codename:' | awk '{print $2}' | grep -E '^valkey[0-9]+$')" || true
+    codenames="$(git ls-tree --name-only "origin/${APT_BRANCH}:dists/" 2>/dev/null \
+        | grep -E '^valkey[0-9]+$')" || true
 
     if [[ -z "$codenames" ]]; then
-        log "No valkey suites found in ${APT_BRANCH}:conf/distributions"
+        log "No valkey suites found in ${APT_BRANCH}:dists/"
         printf '[]'
         return
     fi
@@ -226,10 +220,13 @@ fetch_deployed_per_major() {
 
         # Version field looks like "8.1.6-1~noble".
         # Strip "-<revision>~<distro>" to recover the bare upstream tag.
+        # With multi-version Packages files, sort all versions and take the
+        # highest so the scheduler correctly sees the latest deployed release.
         local version
         version="$(printf '%s\n' "$packages_content" \
-            | grep '^Version:' | head -1 | awk '{print $2}' \
-            | sed 's/-[0-9][0-9]*~.*//')"
+            | grep '^Version:' | awk '{print $2}' \
+            | sed 's/-[0-9][0-9]*~.*//' \
+            | sort -V | tail -1)"
 
         if [[ -z "$version" ]]; then
             log "Could not parse Version from Packages for ${codename} — skipping"
