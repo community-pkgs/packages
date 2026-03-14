@@ -79,6 +79,7 @@ _s3sync_pull() {
         --source-secret-access-key "$R2_SECRET_ACCESS_KEY" \
         --source-region         auto \
         --show-no-progress \
+        --disable-etag-verify \
         "s3://${R2_BUCKET}/" repo/
 }
 
