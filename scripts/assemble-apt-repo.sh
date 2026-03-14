@@ -7,7 +7,7 @@
 #   apt install valkey-server=7.2.11-1~noble
 #
 # Pool layout:
-#   <REPO_DIR>/pool/<component>/v/<project_slug>/<package>_<version>_<arch>.deb
+#   <REPO_DIR>/pool/<component>/<first_letter>/<project_slug>/<package>_<version>_<arch>.deb
 #
 # Dist layout:
 #   <REPO_DIR>/dists/<suite>/<component>/binary-<arch>/Packages[.gz|.xz]
@@ -105,7 +105,7 @@ for artifact_dir in "${ARTIFACTS_DIR}"/*; do
         continue
     fi
 
-    pool_dir="${REPO_DIR}/pool/${component}/v/${PROJECT_SLUG}"
+    pool_dir="${REPO_DIR}/pool/${component}/${PROJECT_SLUG:0:1}/${PROJECT_SLUG}"
     mkdir -p "$pool_dir"
 
     for deb in "${debs[@]}"; do
@@ -152,7 +152,7 @@ log "Architectures: ${architectures[*]}"
 log "Generating Packages files for suite ${REPO_CODENAME}..."
 
 for component in "${components[@]}"; do
-    pool_slug_dir="${REPO_DIR}/pool/${component}/v/${PROJECT_SLUG}"
+    pool_slug_dir="${REPO_DIR}/pool/${component}/${PROJECT_SLUG:0:1}/${PROJECT_SLUG}"
     [[ -d "$pool_slug_dir" ]] || continue
 
     for arch in "${architectures[@]}"; do
@@ -191,7 +191,7 @@ for component in "${components[@]}"; do
         log "Scanning ${#scan_debs[@]} package(s) for ${REPO_CODENAME}/${component}/binary-${arch}"
 
         dpkg-scanpackages --multiversion "$tmp_scan_dir" /dev/null 2>/dev/null \
-            | sed "s|Filename: ${tmp_scan_dir}/|Filename: pool/${component}/v/${PROJECT_SLUG}/|g" \
+            | sed "s|Filename: ${tmp_scan_dir}/|Filename: pool/${component}/${PROJECT_SLUG:0:1}/${PROJECT_SLUG}/|g" \
             > "${dist_dir}/Packages"
 
         gzip -9 -k -f "${dist_dir}/Packages"
