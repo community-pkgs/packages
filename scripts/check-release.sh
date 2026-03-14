@@ -19,14 +19,13 @@
 #   FORCE_TAG         Skip API call, build this tag exactly
 #   STATE_FILE        JSON state file. Default: last_release.json / last_release_<slug>.json
 #   ALWAYS_BUILD      Force has_new=true. Default: false
-#   APT_BRANCH        Branch holding the APT repo. Default: apt
 #   GITHUB_TOKEN      GitHub API token
 #   GITHUB_OUTPUT     Set by GitHub Actions runner
 #
 # Outputs:
 #   has_new           true / false
 #   new_releases      [{"tag":"9.0.3","major":"9"}, …]  or  [{"tag":"3.5.21","major":""}]
-#   all_releases      Same format, reflects current state of the apt branch
+#   all_releases      Same format, reflects current state from the state file
 #   latest_tag        Highest tag found on GitHub
 
 set -euo pipefail
@@ -40,7 +39,6 @@ SUITE_PREFIX="${SUITE_PREFIX:-${_slug}}"
 SUITE_NAME="${SUITE_NAME:-${_slug}}"
 ALWAYS_BUILD="${ALWAYS_BUILD:-false}"
 FORCE_TAG="${FORCE_TAG:-}"
-APT_BRANCH="${APT_BRANCH:-apt}"
 
 if [[ "$SINGLE_SUITE" == "true" ]]; then
     STATE_FILE="${STATE_FILE:-last_release_${_slug}.json}"
@@ -86,39 +84,6 @@ _fetch_releases_json() {
         )"
 }
 
-_apt_branch_fetched=false
-_ensure_apt_branch() {
-    if [[ "$_apt_branch_fetched" == "true" ]]; then return 0; fi
-    if git fetch --depth=1 origin "${APT_BRANCH}" 2>/dev/null; then
-        _apt_branch_fetched=true
-        return 0
-    fi
-    log "apt branch '${APT_BRANCH}' not found — assuming no deployed packages"
-    return 1
-}
-
-_read_suite_version() {
-    local suite="$1"
-    local components
-    components="$(git ls-tree --name-only "origin/${APT_BRANCH}:dists/${suite}/" 2>/dev/null)" || true
-
-    local packages_content=""
-    for component in $components; do
-        if packages_content="$(git show \
-                "origin/${APT_BRANCH}:dists/${suite}/${component}/binary-amd64/Packages" \
-                2>/dev/null)"; then
-            break
-        fi
-    done
-
-    [[ -z "$packages_content" ]] && return
-
-    printf '%s\n' "$packages_content" \
-        | grep '^Version:' | awk '{print $2}' \
-        | sed 's/-[0-9][0-9]*~.*//' \
-        | sort -V | tail -1
-}
-
 # ── Multi-major ──
 
 fetch_latest_per_major() {
@@ -136,37 +101,13 @@ fetch_latest_per_major() {
     ' || die "jq failed while parsing GitHub API response"
 }
 
-fetch_deployed_per_major() {
-    _ensure_apt_branch || { printf '[]'; return; }
-
-    local codenames
-    codenames="$(git ls-tree --name-only "origin/${APT_BRANCH}:dists/" 2>/dev/null \
-        | grep -E "^${SUITE_PREFIX}[0-9]+$")" || true
-
-    if [[ -z "$codenames" ]]; then
-        log "No ${SUITE_PREFIX}N suites found in ${APT_BRANCH}:dists/"
-        printf '[]'
-        return
-    fi
-
-    local result='[]'
-    while IFS= read -r codename; do
-        local major="${codename#"${SUITE_PREFIX}"}"
-        local version
-        version="$(_read_suite_version "$codename")"
-
-        if [[ -z "$version" ]]; then
-            log "No version found for ${codename} — skipping"
-            continue
-        fi
-
-        result="$(printf '%s\n' "$result" \
-            | jq -c --arg m "$major" --arg t "$version" \
-                '. + [{major: $m, tag: $t}]')"
-        log "Deployed: ${codename} = ${version}"
-    done <<< "$codenames"
-
-    printf '%s\n' "$result" | jq -c 'sort_by(.major | tonumber) | reverse'
+state_to_deployed_array() {
+    local state="$1"
+    printf '%s\n' "$state" | jq -c '
+        [to_entries[] | {tag: .value, major: .key}]
+        | sort_by(.major | tonumber)
+        | reverse
+    '
 }
 
 merge_releases() {
@@ -225,23 +166,6 @@ fetch_latest_single() {
     ' || die "jq failed while parsing GitHub API response"
 }
 
-fetch_deployed_single() {
-    _ensure_apt_branch || { printf ''; return; }
-
-    if ! git ls-tree --name-only "origin/${APT_BRANCH}:dists/" 2>/dev/null \
-            | grep -qxF "${SUITE_NAME}"; then
-        log "Suite '${SUITE_NAME}' not found in ${APT_BRANCH}:dists/"
-        printf ''
-        return
-    fi
-
-    local version
-    version="$(_read_suite_version "$SUITE_NAME")"
-
-    printf '%s' "$version"
-    [[ -n "$version" ]] && log "Deployed: ${SUITE_NAME} = ${version}"
-}
-
 load_state_single() {
     if [[ -f "$STATE_FILE" ]]; then
         local content
@@ -278,7 +202,8 @@ if [[ -n "$FORCE_TAG" ]]; then
         MAJOR="$(major_from_tag "$FORCE_TAG")"
         log "major=${MAJOR}"
         new_releases="[{\"tag\":\"${FORCE_TAG}\",\"major\":\"${MAJOR}\"}]"
-        deployed="$(fetch_deployed_per_major)"
+        _state="$(load_state_multi)"
+        deployed="$(state_to_deployed_array "$_state")"
         all_releases="$(merge_releases "$deployed" "$new_releases")"
         latest_tag="$(printf '%s\n' "$all_releases" | jq -r \
             '[.[].tag] | sort_by(split(".") | map(tonumber)) | last')"
@@ -308,7 +233,7 @@ if [[ "$SINGLE_SUITE" == "true" ]]; then
 
     log "Latest tag: ${latest_tag}"
 
-    deployed_tag="$(fetch_deployed_single)"
+    deployed_tag="$(load_state_single)"
     all_releases="$(make_single_releases_json "$latest_tag")"
 
     if [[ "$ALWAYS_BUILD" == "true" ]]; then
@@ -365,7 +290,9 @@ latest_tag="$(echo "$latest_per_major_json" | jq -r \
     '[.[].tag] | sort_by(split(".") | map(tonumber)) | last')"
 log "Overall latest tag: $latest_tag"
 
-deployed_per_major="$(fetch_deployed_per_major)"
+state="$(load_state_multi)"
+log "Current state: $state"
+deployed_per_major="$(state_to_deployed_array "$state")"
 log "Deployed per major: ${deployed_per_major}"
 
 if [[ "$ALWAYS_BUILD" == "true" ]]; then
@@ -383,14 +310,11 @@ if [[ "$ALWAYS_BUILD" == "true" ]]; then
                   | {tag: .tag, major: .major}]'
         )"
     else
-        log "ALWAYS_BUILD=true — apt branch empty, seeding all majors from GitHub"
+        log "ALWAYS_BUILD=true — no deployed state, seeding all majors from GitHub"
         new_releases="$(echo "$latest_per_major_json" | jq -c '[.[] | {tag: .tag, major: .major}]')"
     fi
 
 else
-    state="$(load_state_multi)"
-    log "Current state: $state"
-
     new_releases="$(
         echo "$latest_per_major_json" | jq -c \
             --argjson state "$state" \

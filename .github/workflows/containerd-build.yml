@@ -101,7 +101,7 @@ jobs:
     if: needs.check-release.outputs.has_new == 'true'
     runs-on: ubuntu-latest
     concurrency:
-      group: ${{ github.workflow }}-deploy-${{ github.ref }}
+      group: deploy-r2
       cancel-in-progress: false
 
     env:
@@ -118,6 +118,13 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             dpkg-dev xz-utils gnupg
 
+      - name: Install s3sync
+        run: |
+          curl -fsSL "https://github.com/nidor1998/s3sync/releases/latest/download/s3sync-linux-glibc2.28" \
+            -o /usr/local/bin/s3sync
+          chmod +x /usr/local/bin/s3sync
+          s3sync --version
+
       - name: Import GPG key
         run: |
           [[ -z "${GPG_PRIVATE_KEY:-}" ]] && { echo "ERROR: GPG_PRIVATE_KEY not set" >&2; exit 1; }
@@ -131,7 +138,7 @@ jobs:
           pattern: packages-*
           path: ./downloaded-artifacts
 
-      - name: Deploy to apt branch
+      - name: Deploy to R2
         env:
           PROJECT_NAME: containerd
           PROJECT_SLUG: containerd
@@ -144,6 +151,10 @@ jobs:
           ALL_RELEASES: ${{ needs.check-release.outputs.all_releases }}
           LATEST_TAG: ${{ needs.check-release.outputs.latest_tag }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
-          PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+          PAGES_URL: https://pkgs.bil.co.ua
           ARTIFACTS_DIR: ./downloaded-artifacts
+          R2_ENDPOINT_URL: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: bash scripts/deploy-apt-repo.sh

@@ -5,17 +5,21 @@
 #
 # Usage: generate-root-index.sh [PACKAGE_ENTRY...]
 #   Each entry is pipe-separated: "slug|Display Name|Short description"
+#   Each package must have a logo.svg in its directory (PACKAGES_DIR/slug/logo.svg).
+#   The SVG is inlined directly into the HTML. Falls back to 📦 emoji if missing.
 #
 # Optional:
 #   REPO_TITLE         Default: APT Package Repository
 #   REPO_DESCRIPTION   Default: generic description
 #   REPO_URL           Default: https://github.com/example/repo
 #   PAGES_URL          Default: https://example.github.io/repo
+#   PACKAGES_DIR       Base directory containing per-package folders. Default: .
 #   OUTPUT_PATH        Default: ./index.html
 #   BUILD_DATE         Default: current UTC time
 
 set -euo pipefail
 
+: "${PACKAGES_DIR:=.}"
 : "${REPO_TITLE:=APT Package Repository}"
 : "${REPO_DESCRIPTION:=Unofficial Debian/Ubuntu packages built automatically from upstream releases.}"
 : "${REPO_URL:=https://github.com/example/repo}"
@@ -38,12 +42,19 @@ for entry in "$@"; do
   [[ -n "$name" ]] || name="$slug"
   [[ -n "$desc" ]] || desc="APT packages for ${name}"
 
-  package_url="${PAGES_URL}/${slug}/"
-  package_rel_url="${slug}/"
+  package_url="${PAGES_URL}/${slug}/index.html"
+  package_rel_url="${slug}/index.html"
+
+  _logo_path="${PACKAGES_DIR}/${slug}/logo.svg"
+  if [[ -f "$_logo_path" ]]; then
+    _pkg_icon_html="<div class=\"pkg-logo\">$(cat "$_logo_path")</div>"
+  else
+    _pkg_icon_html="<div class=\"pkg-icon\">📦</div>"
+  fi
 
   package_cards_html+="
       <a class=\"pkg-card\" href=\"${package_rel_url}\">
-        <span class=\"pkg-icon\">📦</span>
+        ${_pkg_icon_html}
         <span class=\"pkg-body\">
           <span class=\"pkg-name\">${name}</span>
           <span class=\"pkg-desc\">${desc}</span>
@@ -147,7 +158,20 @@ cat > "$tmp" <<HTML
     }
     .pkg-card:hover { border-color: #58a6ff; background: #1c2128; }
 
-    .pkg-icon { font-size: 1.5rem; flex-shrink: 0; }
+    .pkg-icon {
+      width: 2rem; height: 2rem;
+      background: linear-gradient(135deg, #f78166 0%, #ff7b72 100%);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .pkg-logo {
+      width: 2rem; height: 2rem;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pkg-logo svg { width: 2rem; height: 2rem; display: block; }
 
     .pkg-body {
       display: flex;

@@ -1,7 +1,7 @@
 # APT Packages
 
 Unofficial Debian/Ubuntu `.deb` packages built automatically from upstream releases
-and published as a signed APT repository via GitHub Pages.
+and published as a signed APT repository at [pkgs.bil.co.ua](https://pkgs.bil.co.ua) via Cloudflare R2.
 
 ---
 
@@ -47,4 +47,5 @@ A PR is even better! To add a new package:
 1. A scheduled workflow (daily) or `workflow_dispatch` checks for a new upstream release.
 2. `.deb` packages are compiled inside Docker for each supported OS/arch combination.
 3. Packages are added to the signed APT repository with `dpkg-scanpackages`.
-4. The repository is pushed to the `apt` branch and served via GitHub Pages.
+4. The existing repository state is pulled from Cloudflare R2, updated, and synced back with [`s3sync`](https://github.com/nidor1998/s3sync).
+5. The repository is served from [pkgs.bil.co.ua](https://pkgs.bil.co.ua) via Cloudflare R2.

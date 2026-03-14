@@ -13,7 +13,6 @@
 # Optional:
 #   PROJECT_UPSTREAM_URL   Default: REPO_URL
 #   PROJECT_README_URL     Default: REPO_URL/blob/main/packages/PROJECT_SLUG/README.md
-#   APT_BRANCH_URL         Default: REPO_URL/tree/apt
 #   APT_SUITE_PREFIX       e.g. "valkey" → suite "valkey9". Default: PROJECT_SLUG
 #   APT_INSTALL_PACKAGE    Default: PROJECT_SLUG-server
 #   PROJECT_LOGO_PATH      Square SVG logo. Falls back to 📦 emoji if unset/missing.
@@ -30,7 +29,7 @@ set -euo pipefail
 
 : "${PROJECT_UPSTREAM_URL:=$REPO_URL}"
 : "${PROJECT_README_URL:=${REPO_URL}/blob/main/packages/${PROJECT_SLUG}/README.md}"
-: "${APT_BRANCH_URL:=${REPO_URL}/tree/apt}"
+
 
 : "${RELEASE_TAG:=unknown}"
 : "${MAJOR_VERSION:=0}"
@@ -325,14 +324,6 @@ ${_tab_css_rules}
         <span class="link-body">
           <span class="link-title">Installation Guide &amp; README</span>
           <span class="link-desc">Setup steps, package details, and usage notes</span>
-        </span>
-      </a>
-
-      <a class="link-item" href="${APT_BRANCH_URL}" target="_blank" rel="noopener">
-        <span class="link-icon">📦</span>
-        <span class="link-body">
-          <span class="link-title">APT Repository Files (apt branch)</span>
-          <span class="link-desc">Signed .deb packages and metadata</span>
         </span>
       </a>
 
