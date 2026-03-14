@@ -51,7 +51,9 @@ fi
 
 : "${OUTPUT_PATH:=./index.html}"
 
-RELEASES_JSON="$(echo "$RELEASES_JSON" | jq -c '[sort_by(.major | tonumber) | reverse[]]')"
+RELEASES_JSON="$(echo "$RELEASES_JSON" | jq -c '[sort_by(.major | if . == "" then 0 else tonumber end) | reverse[]]')"
+
+_release_count="$(echo "$RELEASES_JSON" | jq 'length')"
 
 if [[ -z "${BUILD_DATE:-}" ]]; then
   BUILD_DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
@@ -59,35 +61,77 @@ fi
 
 PAGE_TITLE="${PROJECT_NAME} APT Repository"
 
-# tabs: radio inputs
-_tab_inputs=""
-_first_tab=true
-while IFS= read -r rel; do
-  major="$(echo "$rel" | jq -r '.major')"
-  if [[ "$_first_tab" == "true" ]]; then
-    _tab_inputs+="  <input type=\"radio\" name=\"vtab\" id=\"tab-major-${major}\" class=\"tab-input\" checked>"$'\n'
-    _first_tab=false
-  else
-    _tab_inputs+="  <input type=\"radio\" name=\"vtab\" id=\"tab-major-${major}\" class=\"tab-input\">"$'\n'
-  fi
-done < <(echo "$RELEASES_JSON" | jq -c '.[]')
+# Helper: derive a stable tab identifier from a release entry.
+# For multi-major (major != ""), use the major number.
+# For single-suite (major == ""), use "latest".
+_tab_id_for() {
+  local m="$1"
+  if [[ -n "$m" ]]; then printf '%s' "$m"; else printf 'latest'; fi
+}
 
-# tabs: labels
-_tab_labels_html=""
-while IFS= read -r rel; do
-  major="$(echo "$rel" | jq -r '.major')"
-  tag="$(echo "$rel" | jq -r '.tag')"
-  _tab_labels_html+="      <label for=\"tab-major-${major}\" class=\"tab-label\">${PROJECT_NAME} ${major}.x<span class=\"tab-version\">v${tag}</span></label>"$'\n'
-done < <(echo "$RELEASES_JSON" | jq -c '.[]')
+if [[ "$_release_count" -eq 1 ]]; then
+  # ── Single-suite: no tabs, just a code block ──
+  _single_rel="$(echo "$RELEASES_JSON" | jq -c '.[0]')"
+  _single_tag="$(echo "$_single_rel" | jq -r '.tag')"
+  _single_major="$(echo "$_single_rel" | jq -r '.major')"
+  _single_suite="${APT_SUITE_PREFIX}${_single_major}"
 
-# tabs: panels
-_tab_panels_html=""
-while IFS= read -r rel; do
-  tag="$(echo "$rel" | jq -r '.tag')"
-  major="$(echo "$rel" | jq -r '.major')"
-  suite="${APT_SUITE_PREFIX}${major}"
-  _tab_panels_html+="$(cat <<ENDPANEL
-      <div class="tab-panel" data-major="${major}">
+  _tab_inputs=""
+  _tab_labels_html=""
+  _tab_css_rules=""
+  _tab_panels_html="$(cat <<ENDPANEL
+      <div class="tab-panel" style="display:block">
+        <pre>sudo mkdir -p /etc/apt/keyrings
+curl -fsSL ${PAGES_URL}/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/${PROJECT_SLUG}.gpg
+echo "deb [signed-by=/etc/apt/keyrings/${PROJECT_SLUG}.gpg] ${PAGES_URL} ${_single_suite} ${APT_COMPONENT:-\$(. /etc/os-release && echo "\${VERSION_CODENAME}")}" \\
+  | sudo tee /etc/apt/sources.list.d/${PROJECT_SLUG}.list
+echo -e 'Package: *\nPin: release a=${_single_suite}\nPin-Priority: 990' \\
+  | sudo tee /etc/apt/preferences.d/${PROJECT_SLUG}
+sudo apt update && sudo apt install ${APT_INSTALL_PACKAGE}</pre>
+      </div>
+ENDPANEL
+)"
+
+else
+  # ── Multi-major: tabbed interface ──
+
+  # tabs: radio inputs
+  _tab_inputs=""
+  _first_tab=true
+  while IFS= read -r rel; do
+    major="$(echo "$rel" | jq -r '.major')"
+    tab_id="$(_tab_id_for "$major")"
+    if [[ "$_first_tab" == "true" ]]; then
+      _tab_inputs+="  <input type=\"radio\" name=\"vtab\" id=\"tab-major-${tab_id}\" class=\"tab-input\" checked>"$'\n'
+      _first_tab=false
+    else
+      _tab_inputs+="  <input type=\"radio\" name=\"vtab\" id=\"tab-major-${tab_id}\" class=\"tab-input\">"$'\n'
+    fi
+  done < <(echo "$RELEASES_JSON" | jq -c '.[]')
+
+  # tabs: labels
+  _tab_labels_html=""
+  while IFS= read -r rel; do
+    major="$(echo "$rel" | jq -r '.major')"
+    tag="$(echo "$rel" | jq -r '.tag')"
+    tab_id="$(_tab_id_for "$major")"
+    if [[ -n "$major" ]]; then
+      tab_label="${PROJECT_NAME} ${major}.x"
+    else
+      tab_label="${PROJECT_NAME} v${tag}"
+    fi
+    _tab_labels_html+="      <label for=\"tab-major-${tab_id}\" class=\"tab-label\">${tab_label}<span class=\"tab-version\">v${tag}</span></label>"$'\n'
+  done < <(echo "$RELEASES_JSON" | jq -c '.[]')
+
+  # tabs: panels
+  _tab_panels_html=""
+  while IFS= read -r rel; do
+    tag="$(echo "$rel" | jq -r '.tag')"
+    major="$(echo "$rel" | jq -r '.major')"
+    tab_id="$(_tab_id_for "$major")"
+    suite="${APT_SUITE_PREFIX}${major}"
+    _tab_panels_html+="$(cat <<ENDPANEL
+      <div class="tab-panel" data-major="${tab_id}">
         <pre>sudo mkdir -p /etc/apt/keyrings
 curl -fsSL ${PAGES_URL}/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/${PROJECT_SLUG}.gpg
 echo "deb [signed-by=/etc/apt/keyrings/${PROJECT_SLUG}.gpg] ${PAGES_URL} ${suite} ${APT_COMPONENT:-\$(. /etc/os-release && echo "\${VERSION_CODENAME}")}" \\
@@ -98,15 +142,17 @@ sudo apt update && sudo apt install ${APT_INSTALL_PACKAGE}</pre>
       </div>
 ENDPANEL
 )"$'\n'
-done < <(echo "$RELEASES_JSON" | jq -c '.[]')
+  done < <(echo "$RELEASES_JSON" | jq -c '.[]')
 
-# tabs: per-major CSS rules
-_tab_css_rules=""
-while IFS= read -r rel; do
-  major="$(echo "$rel" | jq -r '.major')"
-  _tab_css_rules+="    #tab-major-${major}:checked ~ .tabs-wrapper .tab-panel[data-major=\"${major}\"] { display: block; }"$'\n'
-  _tab_css_rules+="    #tab-major-${major}:checked ~ .tabs-wrapper .tab-bar label[for=\"tab-major-${major}\"] { background: #1c2128; border-color: #58a6ff; color: #58a6ff; border-bottom-color: #1c2128; }"$'\n'
-done < <(echo "$RELEASES_JSON" | jq -c '.[]')
+  # tabs: per-major CSS rules
+  _tab_css_rules=""
+  while IFS= read -r rel; do
+    major="$(echo "$rel" | jq -r '.major')"
+    tab_id="$(_tab_id_for "$major")"
+    _tab_css_rules+="    #tab-major-${tab_id}:checked ~ .tabs-wrapper .tab-panel[data-major=\"${tab_id}\"] { display: block; }"$'\n'
+    _tab_css_rules+="    #tab-major-${tab_id}:checked ~ .tabs-wrapper .tab-bar label[for=\"tab-major-${tab_id}\"] { background: #1c2128; border-color: #58a6ff; color: #58a6ff; border-bottom-color: #1c2128; }"$'\n'
+  done < <(echo "$RELEASES_JSON" | jq -c '.[]')
+fi
 
 # logo
 if [[ -n "${PROJECT_LOGO_PATH:-}" && -f "$PROJECT_LOGO_PATH" ]]; then
