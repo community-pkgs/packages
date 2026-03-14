@@ -1,14 +1,15 @@
 ARG DISTRO=debian:13
 FROM ${DISTRO} AS builder
 
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=UTC
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=UTC
 
 ARG RELEASE_TAG=2.2.0
 ARG ARCH=amd64
 
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
+        build-essential \
         ca-certificates \
         curl \
         debhelper \
@@ -26,18 +27,17 @@ RUN curl -fSL \
     tar xz --strip-components=1 -C binaries -f /tmp/containerd.tar.gz && \
     rm /tmp/containerd.tar.gz
 
-COPY packages/containerd/debian/  debian/
-COPY scripts/gen-changelog-github.sh /usr/local/bin/gen-changelog-github.sh
-RUN chmod +x /usr/local/bin/gen-changelog-github.sh
+COPY packages/containerd/debian/ debian/
+COPY --chmod=0755 scripts/gen-changelog-github.sh /usr/local/bin/gen-changelog-github.sh
 
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
     gen-changelog-github.sh containerd containerd/containerd "${RELEASE_TAG}" \
         "community-pkgs <https://github.com/community-pkgs/packages>" stable
 
-ENV DEB_BUILD_OPTIONS="parallel=$(nproc)"
-RUN sed -i "s/^Architecture: any$/Architecture: ${ARCH}/" debian/control && \
-    dpkg-buildpackage -b -us -uc --host-arch ${ARCH}
+RUN chmod +x debian/rules && \
+    sed -i "s/^Architecture: any$/Architecture: ${ARCH}/" debian/control && \
+    DEB_BUILD_OPTIONS="parallel=$(nproc)" dpkg-buildpackage -b -us -uc --host-arch ${ARCH}
 
 FROM scratch AS output
 COPY --from=builder /*.deb /
