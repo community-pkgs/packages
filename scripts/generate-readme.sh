@@ -25,20 +25,7 @@
 #   README_UBUNTU_SUFFIX      Suffix appended to Ubuntu versions in the table.
 #                             Default:  LTS
 #
-# Additional substitutions:
-#   Any {{KEY}} placeholder remaining in the template after the table
-#   substitution is replaced if a matching environment variable KEY is set.
-#   For example, if the template contains {{PAGES_URL}} and PAGES_URL is
-#   exported, it will be replaced with the value of that variable.
-#   Unset placeholders are left as-is so the caller can detect them.
-#
-# Notes:
-# - This parser is intentionally lightweight and matches the current workflow
-#   matrix layout:
-#       matrix.os[].image
-#       matrix.os[].codename
-#       matrix.arch[]
-# - It is reusable across packages, but it is not a general YAML parser.
+# Any remaining {{KEY}} placeholders are substituted from matching env vars.
 
 set -euo pipefail
 
@@ -46,9 +33,6 @@ OUTPUT_PATH="${1:-}"
 TEMPLATE_PATH="${2:-}"
 WORKFLOW_PATH="${3:-}"
 
-# Allow env var fallbacks so the script is callable both as:
-#   generate-readme.sh OUTPUT TEMPLATE WORKFLOW   (positional args)
-#   OUTPUT_PATH=… TEMPLATE_PATH=… WORKFLOW_PATH=… generate-readme.sh  (env vars)
 : "${OUTPUT_PATH:?ERROR: OUTPUT_PATH is required (arg 1 or env var); e.g. packages/valkey/README.md}"
 : "${TEMPLATE_PATH:?ERROR: TEMPLATE_PATH is required (arg 2 or env var); e.g. packages/valkey/README.md.in}"
 : "${WORKFLOW_PATH:?ERROR: WORKFLOW_PATH is required (arg 3 or env var); e.g. .github/workflows/valkey-build.yml}"
@@ -68,7 +52,6 @@ log() {
     printf '[generate-readme] %s\n' "$*" >&2
 }
 
-# Replace {{KEY}} placeholders where env var KEY is set; leave others unchanged.
 substitute_env_placeholders() {
     local result="$1"
     local key value
@@ -135,7 +118,6 @@ current_image=""
 while IFS= read -r line; do
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
 
-    # Any key resets state to avoid picking up duplicate sections.
     if [[ "$line" =~ ^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_-]*:[[:space:]]*$ ]]; then
         case "$line" in
             *'os:'   ) in_os=1; in_arch=0; continue ;;
@@ -186,7 +168,7 @@ for i in "${!os_images[@]}"; do
     codename="${os_codenames[$i]}"
     distro="$(format_distribution_name "$image")"
 
-    printf -v row '| %s | `%s` | %s |' "$distro" "$codename" "$arch_md"
+    printf -v row "| %s | \`%s\` | %s |" "$distro" "$codename" "$arch_md"
     table+=$'\n'"$row"
 done
 

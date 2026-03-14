@@ -10,24 +10,8 @@ and published as a signed APT repository via GitHub Pages.
 | Package | Description | README |
 |---------|-------------|--------|
 | [Valkey](https://valkey.io) | High-performance key-value store (BSD-licensed Redis fork) | [Installation & details](packages/valkey/README.md) |
-
----
-
-## APT Repository
-
-All packages share a single APT repository served via GitHub Pages from the `apt` branch.
-
-```sh
-# Add the signing key
-sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://community-pkgs.github.io/packages/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/packages.gpg
-
-# Add the repository (replace SUITE for the desired package)
-echo "deb [signed-by=/etc/apt/keyrings/packages.gpg] https://community-pkgs.github.io/packages SUITE $(. /etc/os-release && echo "$VERSION_CODENAME")" | sudo tee /etc/apt/sources.list.d/packages.list
-sudo apt update
-```
-
-See each package's README for the exact `SUITE`, and package names.
+| [etcd](https://etcd.io) | Distributed reliable key-value store for the most critical data of a distributed system | [Installation & details](packages/etcd/README.md) |
+| [containerd](https://containerd.io) | Industry-standard container runtime (CNCF graduated project) | [Installation & details](packages/containerd/README.md) |
 
 ---
 
@@ -62,5 +46,5 @@ A PR is even better! To add a new package:
 
 1. A scheduled workflow (daily) or `workflow_dispatch` checks for a new upstream release.
 2. `.deb` packages are compiled inside Docker for each supported OS/arch combination.
-3. Packages are added to the signed APT repository with `reprepro`.
+3. Packages are added to the signed APT repository with `dpkg-scanpackages`.
 4. The repository is pushed to the `apt` branch and served via GitHub Pages.

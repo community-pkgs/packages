@@ -1,4 +1,3 @@
-# Stage 1: Builder
 ARG DISTRO=debian:13
 FROM ${DISTRO} AS builder
 
@@ -53,8 +52,6 @@ COPY packages/valkey/debian/  debian/
 COPY scripts/gen-changelog-github.sh /usr/local/bin/gen-changelog-github.sh
 RUN chmod +x /usr/local/bin/gen-changelog-github.sh
 
-# GITHUB_TOKEN is injected via BuildKit secret so it never appears in image
-# layers or `docker history` output.
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
     gen-changelog-github.sh valkey valkey-io/valkey "${RELEASE_TAG}" \
@@ -62,8 +59,8 @@ RUN --mount=type=secret,id=github_token \
 
 ENV MAJOR=${MAJOR}
 ENV DEB_BUILD_OPTIONS="parallel=$(nproc)"
-RUN dpkg-buildpackage -b -us -uc --host-arch ${ARCH}
+RUN sed -i "s/^Architecture: any$/Architecture: ${ARCH}/" debian/control && \
+    dpkg-buildpackage -b -us -uc --host-arch ${ARCH}
 
-# Stage 2: Output
 FROM scratch AS output
 COPY --from=builder /*.deb /

@@ -1,47 +1,27 @@
 #!/usr/bin/env bash
 # generate-apt-index.sh
 #
-# Generate a styled index.html for an APT repository root.
+# Generate a styled index.html for an APT package repository.
 #
-# This script is package-agnostic and can be reused for any project by setting
-# environment variables.
-#
-# Required (recommended) environment variables:
+# Required:
 #   PROJECT_NAME         e.g. "Valkey"
-#   PROJECT_SLUG         e.g. "valkey" (used in fallback URLs/titles)
+#   PROJECT_SLUG         e.g. "valkey"
 #   REPO_URL             e.g. "https://github.com/owner/repo"
-#   PAGES_URL            e.g. "https://owner.github.io/repo" (or custom domain)
-#   RELEASES_JSON        JSON array of all active releases, e.g.:
-#                        '[{"tag":"9.0.3","major":"9"},{"tag":"8.1.0","major":"8"}]'
-#                        When set, overrides RELEASE_TAG / MAJOR_VERSION for display.
-#                        Falls back to constructing a single-element array from
-#                        RELEASE_TAG + MAJOR_VERSION when not set.
-#   RELEASE_TAG          e.g. "9.0.3"  (used as fallback when RELEASES_JSON unset)
-#   MAJOR_VERSION        e.g. "9"      (used as fallback when RELEASES_JSON unset)
+#   PAGES_URL            e.g. "https://owner.github.io/repo"
+#   RELEASES_JSON        e.g. '[{"tag":"9.0.3","major":"9"},{"tag":"8.1.0","major":"8"}]'
 #
-# Optional environment variables:
-#   PROJECT_UPSTREAM_URL   e.g. "https://github.com/valkey-io/valkey"
-#   PROJECT_README_URL     e.g. "https://github.com/owner/repo/blob/main/packages/valkey/README.md"
-#   APT_BRANCH_URL         e.g. "https://github.com/owner/repo/tree/apt"
-#   APT_SUITE_PREFIX       e.g. "valkey" -> produces suite "valkey9"
-
-#   APT_INSTALL_PACKAGE    e.g. "valkey-server"
-#   PROJECT_LOGO_PATH      e.g. "packages/valkey/logo.svg"
-#                          Path to a square SVG logo for the package.
-#                          If unset or the file does not exist, falls back to a
-#                          📦 emoji on an orange gradient background.
-#   MAINTAINER_EMAIL       e.g. "packages@example.com"
-#   OUTPUT_PATH            e.g. "./repo/index.html"
-#   BUILD_DATE             e.g. "2026-01-01 00:00 UTC"
-#
-# Notes:
-# - If PROJECT_README_URL is unset, a fallback is built as:
-#     "${REPO_URL}/blob/main/packages/${PROJECT_SLUG}/README.md"
-# - If PROJECT_UPSTREAM_URL is unset, REPO_URL is used.
+# Optional:
+#   PROJECT_UPSTREAM_URL   Default: REPO_URL
+#   PROJECT_README_URL     Default: REPO_URL/blob/main/packages/PROJECT_SLUG/README.md
+#   APT_BRANCH_URL         Default: REPO_URL/tree/apt
+#   APT_SUITE_PREFIX       e.g. "valkey" → suite "valkey9". Default: PROJECT_SLUG
+#   APT_INSTALL_PACKAGE    Default: PROJECT_SLUG-server
+#   PROJECT_LOGO_PATH      Square SVG logo. Falls back to 📦 emoji if unset/missing.
+#   OUTPUT_PATH            Default: ./index.html
+#   BUILD_DATE             Default: current UTC time
 
 set -euo pipefail
 
-# ----- defaults / fallbacks -----
 : "${PROJECT_NAME:=Package}"
 : "${PROJECT_SLUG:=package}"
 
@@ -55,9 +35,6 @@ set -euo pipefail
 : "${RELEASE_TAG:=unknown}"
 : "${MAJOR_VERSION:=0}"
 
-# If RELEASES_JSON is not provided, build a single-element array from the
-# legacy RELEASE_TAG / MAJOR_VERSION variables so the rest of the script
-# works uniformly regardless of how it is called.
 if [[ -z "${RELEASES_JSON:-}" ]]; then
   RELEASES_JSON="[{\"tag\":\"${RELEASE_TAG}\",\"major\":\"${MAJOR_VERSION}\"}]"
 fi
@@ -65,27 +42,24 @@ fi
 : "${APT_SUITE_PREFIX:=$PROJECT_SLUG}"
 
 : "${APT_INSTALL_PACKAGE:=${PROJECT_SLUG}-server}"
+: "${APT_COMPONENT:=}"
 
-# Validate that RELEASES_JSON is a non-empty array.
 if ! echo "$RELEASES_JSON" | jq -e 'type == "array" and length > 0' > /dev/null 2>&1; then
   echo "generate-apt-index: WARNING: RELEASES_JSON is empty or invalid, falling back to RELEASE_TAG" >&2
   RELEASES_JSON="[{\"tag\":\"${RELEASE_TAG}\",\"major\":\"${MAJOR_VERSION}\"}]"
 fi
 
-: "${MAINTAINER_EMAIL:=packages@example.com}"
 : "${OUTPUT_PATH:=./index.html}"
 
-# Sort releases by major version descending (highest first) for display.
 RELEASES_JSON="$(echo "$RELEASES_JSON" | jq -c '[sort_by(.major | tonumber) | reverse[]]')"
 
 if [[ -z "${BUILD_DATE:-}" ]]; then
   BUILD_DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
 fi
 
-# ----- derived values -----
 PAGE_TITLE="${PROJECT_NAME} APT Repository"
 
-# ----- tabs: radio inputs (first one checked) -----
+# tabs: radio inputs
 _tab_inputs=""
 _first_tab=true
 while IFS= read -r rel; do
@@ -98,7 +72,7 @@ while IFS= read -r rel; do
   fi
 done < <(echo "$RELEASES_JSON" | jq -c '.[]')
 
-# ----- tabs: labels -----
+# tabs: labels
 _tab_labels_html=""
 while IFS= read -r rel; do
   major="$(echo "$rel" | jq -r '.major')"
@@ -106,7 +80,7 @@ while IFS= read -r rel; do
   _tab_labels_html+="      <label for=\"tab-major-${major}\" class=\"tab-label\">${PROJECT_NAME} ${major}.x<span class=\"tab-version\">v${tag}</span></label>"$'\n'
 done < <(echo "$RELEASES_JSON" | jq -c '.[]')
 
-# ----- tabs: panels with install commands -----
+# tabs: panels
 _tab_panels_html=""
 while IFS= read -r rel; do
   tag="$(echo "$rel" | jq -r '.tag')"
@@ -116,15 +90,17 @@ while IFS= read -r rel; do
       <div class="tab-panel" data-major="${major}">
         <pre>sudo mkdir -p /etc/apt/keyrings
 curl -fsSL ${PAGES_URL}/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/${PROJECT_SLUG}.gpg
-echo "deb [signed-by=/etc/apt/keyrings/${PROJECT_SLUG}.gpg] ${PAGES_URL} ${suite} \$(. /etc/os-release && echo "\${VERSION_CODENAME}")" \\
+echo "deb [signed-by=/etc/apt/keyrings/${PROJECT_SLUG}.gpg] ${PAGES_URL} ${suite} ${APT_COMPONENT:-\$(. /etc/os-release && echo "\${VERSION_CODENAME}")}" \\
   | sudo tee /etc/apt/sources.list.d/${PROJECT_SLUG}.list
+echo -e 'Package: *\nPin: release a=${suite}\nPin-Priority: 990' \
+  | sudo tee /etc/apt/preferences.d/${PROJECT_SLUG}
 sudo apt update && sudo apt install ${APT_INSTALL_PACKAGE}</pre>
       </div>
 ENDPANEL
 )"$'\n'
 done < <(echo "$RELEASES_JSON" | jq -c '.[]')
 
-# ----- tabs: per-major CSS rules (panel visibility + active label) -----
+# tabs: per-major CSS rules
 _tab_css_rules=""
 while IFS= read -r rel; do
   major="$(echo "$rel" | jq -r '.major')"
@@ -132,7 +108,7 @@ while IFS= read -r rel; do
   _tab_css_rules+="    #tab-major-${major}:checked ~ .tabs-wrapper .tab-bar label[for=\"tab-major-${major}\"] { background: #1c2128; border-color: #58a6ff; color: #58a6ff; border-bottom-color: #1c2128; }"$'\n'
 done < <(echo "$RELEASES_JSON" | jq -c '.[]')
 
-# ----- logo -----
+# logo
 if [[ -n "${PROJECT_LOGO_PATH:-}" && -f "$PROJECT_LOGO_PATH" ]]; then
   _logo_css='    .logo-icon {
       width: 42px; height: 42px;
@@ -314,6 +290,14 @@ ${_tab_css_rules}
         </span>
       </a>
 
+      <a class="link-item" href="${PAGES_URL}" target="_blank" rel="noopener">
+        <span class="link-icon">🗂️</span>
+        <span class="link-body">
+          <span class="link-title">Browse All Available Packages</span>
+          <span class="link-desc">All available package repositories</span>
+        </span>
+      </a>
+
       <a class="link-item" href="${REPO_URL}" target="_blank" rel="noopener">
         <span class="link-icon">🛠️</span>
         <span class="link-body">
@@ -349,7 +333,7 @@ ${_tab_panels_html}
 
     <p class="footer">
       Built on ${BUILD_DATE}<br />
-      Maintained by <a href="mailto:${MAINTAINER_EMAIL}">${MAINTAINER_EMAIL}</a>
+      Maintained by <a href="${REPO_URL}" target="_blank" rel="noopener">${REPO_URL}</a>
     </p>
   </main>
 </body>

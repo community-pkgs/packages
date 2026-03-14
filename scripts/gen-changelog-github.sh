@@ -1,8 +1,6 @@
 #!/bin/bash
 # gen-changelog-github.sh — generate debian/changelog from GitHub Releases API
 #
-# Works with any GitHub-hosted package, not just Valkey.
-#
 # Usage:
 #   gen-changelog-github.sh PACKAGE REPO RELEASE_TAG MAINTAINER DISTRO [OUTPUT]
 #
@@ -15,7 +13,10 @@
 #   OUTPUT          Path to write changelog to        (default: debian/changelog)
 #
 # Environment:
-#   GITHUB_TOKEN  Optional. Bearer token for GitHub API to avoid rate limiting.
+#   GITHUB_TOKEN      Optional. Bearer token for GitHub API to avoid rate limiting.
+#   VERSION_PREFIX    Version prefix for filtering releases. Default: "<MAJOR>."
+#                     Override when the major version is too broad, e.g. "3.5." for
+#                     etcd where 3.4.x and 3.5.x are separate release lines.
 #
 # Dependencies: curl, jq, awk, GNU date (coreutils)
 
@@ -39,6 +40,8 @@ if [[ ! "$MAJOR" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
+: "${VERSION_PREFIX:=${MAJOR}.}"
+
 _CLEANUP_FILES=()
 _cleanup() {
     if [[ ${#_CLEANUP_FILES[@]} -gt 0 ]]; then
@@ -50,7 +53,6 @@ trap _cleanup EXIT INT TERM
 log() { printf '[gen-changelog] %s\n' "$*" >&2; }
 die() { printf '[gen-changelog] ERROR: %s\n' "$*" >&2; exit 1; }
 
-# Convert ISO 8601 → RFC 2822 using GNU date (always present in Debian/Ubuntu).
 iso_to_rfc2822() {
     date -d "$1" -R
 }
@@ -66,13 +68,6 @@ detect_urgency() {
     esac
 }
 
-# Parse a GitHub markdown release body into Debian changelog bullet points.
-#
-# Rules:
-#   - ^#{1,3} lines become section labels prefixed to subsequent bullets.
-#   - Lines starting with "* " or "- " become changelog entries.
-#   - Everything else is silently skipped.
-#   - If no bullets are found, emits "  * Upstream release <tag>." as fallback.
 parse_body() {
     local _body="$1"
     local _tag="$2"
@@ -157,9 +152,7 @@ done
 _all_releases=$(jq -cs 'add // []' "$_pages_tmp") \
     || die "jq failed merging pages — is jq installed?"
 
-# Keep only stable releases for this major version, at or below RELEASE_TAG.
-# semver() pads to 3 components so "9.0" compares correctly against "9.0.3".
-_JQ_FILTER='
+_filtered=$(jq -c --arg pfx "${VERSION_PREFIX}" --arg cutoff "$RELEASE_TAG" '
 def semver(tag):
     (tag | ltrimstr("v") | split("."))
     | map(tonumber? // 0)
@@ -177,9 +170,7 @@ def semver(tag):
 | sort_by(semver(.tag_name))
 | reverse
 | .[]
-'
-
-_filtered=$(jq -c --arg pfx "${MAJOR}." --arg cutoff "$RELEASE_TAG" "$_JQ_FILTER" <<< "$_all_releases") \
+' <<< "$_all_releases") \
     || die "jq failed filtering releases"
 
 if [[ -n "$_filtered" ]]; then
@@ -196,7 +187,7 @@ if [[ "$first_tag" != "$RELEASE_TAG" ]]; then
     die "RELEASE_TAG=${RELEASE_TAG} not found in GitHub releases for ${REPO} (latest matching: ${first_tag})"
 fi
 
-log "Found ${#_entries[@]} stable release(s) for ${PACKAGE} ${MAJOR}.x (up to ${RELEASE_TAG})"
+log "Found ${#_entries[@]} stable release(s) for ${PACKAGE} ${VERSION_PREFIX}x (up to ${RELEASE_TAG})"
 
 : > "$OUTPUT"
 

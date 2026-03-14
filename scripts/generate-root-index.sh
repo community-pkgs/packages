@@ -1,57 +1,34 @@
 #!/usr/bin/env bash
 # generate-root-index.sh
 #
-# Generate a styled root index.html for a multi-package APT repository.
+# Generate a styled landing page listing all available package repositories.
 #
-# This page serves as the landing page for the GitHub Pages site and lists
-# all available packages with links to their individual pages.
+# Usage: generate-root-index.sh [PACKAGE_ENTRY...]
+#   Each entry is pipe-separated: "slug|Display Name|Short description"
 #
-# Usage:
-#   generate-root-index.sh [PACKAGE_ENTRY...]
-#
-#   Each PACKAGE_ENTRY is a pipe-separated string:
-#     "slug|Display Name|Short description"
-#
-#   Example:
-#     bash generate-root-index.sh \
-#       "valkey|Valkey|High-performance in-memory data store (Redis fork)"
-#
-# Environment variables:
-#   REPO_TITLE         Page / site title.
-#                      Default: APT Package Repository
-#   REPO_DESCRIPTION   Short paragraph shown under the title.
-#                      Default: generic description
-#   REPO_URL           URL to the packaging source repository on GitHub.
-#                      Default: https://github.com/example/repo
-#   PAGES_URL          GitHub Pages base URL (no trailing slash).
-#                      Default: https://example.github.io/repo
-#   MAINTAINER_EMAIL   Contact address shown in the footer.
-#                      Default: packages@example.com
-#   OUTPUT_PATH        Where to write the generated file.
-#                      Default: ./index.html
-#   BUILD_DATE         Human-readable build timestamp.
-#                      Default: current UTC time
+# Optional:
+#   REPO_TITLE         Default: APT Package Repository
+#   REPO_DESCRIPTION   Default: generic description
+#   REPO_URL           Default: https://github.com/example/repo
+#   PAGES_URL          Default: https://example.github.io/repo
+#   OUTPUT_PATH        Default: ./index.html
+#   BUILD_DATE         Default: current UTC time
 
 set -euo pipefail
 
-# ── defaults ──────────────────────────────────────────────────────────────────
 : "${REPO_TITLE:=APT Package Repository}"
 : "${REPO_DESCRIPTION:=Unofficial Debian/Ubuntu packages built automatically from upstream releases.}"
 : "${REPO_URL:=https://github.com/example/repo}"
 : "${PAGES_URL:=https://example.github.io/repo}"
-: "${MAINTAINER_EMAIL:=packages@example.com}"
 : "${OUTPUT_PATH:=./index.html}"
 
 if [[ -z "${BUILD_DATE:-}" ]]; then
   BUILD_DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
 fi
 
-# ── helpers ───────────────────────────────────────────────────────────────────
 die() { printf '[generate-root-index] ERROR: %s\n' "$*" >&2; exit 1; }
 log() { printf '[generate-root-index] %s\n' "$*" >&2; }
 
-# ── parse package entries from positional arguments ───────────────────────────
-# Each arg: "slug|Display Name|Short description"
 package_cards_html=""
 
 for entry in "$@"; do
@@ -81,7 +58,7 @@ if [[ -z "$package_cards_html" ]]; then
       <p class=\"no-packages\">No packages configured yet.</p>"
 fi
 
-# ── emit HTML ─────────────────────────────────────────────────────────────────
+# ── emit HTML ──
 mkdir -p "$(dirname "$OUTPUT_PATH")"
 tmp="$(mktemp)"
 
@@ -264,7 +241,7 @@ cat > "$tmp" <<HTML
     <hr class="divider" />
 
     <p class="footer">
-      Maintained by <a href="mailto:${MAINTAINER_EMAIL}">${MAINTAINER_EMAIL}</a>
+      Maintained by <a href="${REPO_URL}" target="_blank" rel="noopener">${REPO_URL}</a>
     </p>
 
   </main>

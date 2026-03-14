@@ -35,6 +35,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_REPO: valkey-io/valkey
+          SINGLE_SUITE: "false"
+          SUITE_PREFIX: valkey
           FORCE_TAG: ${{ github.event.inputs.release_tag }}
           ALWAYS_BUILD: ${{ github.event_name == 'workflow_dispatch' }}
         run: bash scripts/check-release.sh
@@ -53,7 +55,6 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add last_release.json packages/valkey/README.md
 
-          # Commit only when there is an actual staged change.
           if git diff --cached --quiet; then
             echo "No changes to commit for release state or generated README"
           else
@@ -125,10 +126,6 @@ jobs:
     env:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
       GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
-      NEW_RELEASES: ${{ needs.check-release.outputs.new_releases }}
-      ALL_RELEASES: ${{ needs.check-release.outputs.all_releases }}
-      LATEST_TAG: ${{ needs.check-release.outputs.latest_tag }}
-      PROJECT_SLUG: valkey
 
     steps:
       - name: Checkout repository
@@ -138,28 +135,14 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            dpkg-dev \
-            xz-utils \
-            gnupg
+            dpkg-dev xz-utils gnupg
 
-      - name: Import GPG key and generate public.asc
+      - name: Import GPG key
         run: |
-          if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
-            echo "ERROR: GPG_PRIVATE_KEY secret is not set or is empty" >&2
-            exit 1
-          fi
-          if [[ -z "${GPG_KEY_ID:-}" ]]; then
-            echo "ERROR: GPG_KEY_ID secret is not set or is empty" >&2
-            exit 1
-          fi
+          [[ -z "${GPG_PRIVATE_KEY:-}" ]] && { echo "ERROR: GPG_PRIVATE_KEY not set" >&2; exit 1; }
+          [[ -z "${GPG_KEY_ID:-}" ]]      && { echo "ERROR: GPG_KEY_ID not set" >&2; exit 1; }
           echo "$GPG_PRIVATE_KEY" | base64 --decode | gpg --batch --yes --import
-          gpg --list-secret-keys --fingerprint
-
-          if ! gpg --list-keys "$GPG_KEY_ID" > /dev/null 2>&1; then
-            echo "Error: Key $GPG_KEY_ID not found after import!"
-            exit 1
-          fi
-          echo "GPG key $GPG_KEY_ID imported successfully (public.asc is generated inside the deploy loop)"
+          gpg --list-keys "$GPG_KEY_ID" > /dev/null 2>&1 || { echo "Key $GPG_KEY_ID not found after import" >&2; exit 1; }
 
       - name: Download all packages artifacts
         uses: actions/download-artifact@v4
@@ -167,111 +150,18 @@ jobs:
           pattern: packages-*
           path: ./downloaded-artifacts
 
-      - name: Assemble, generate and deploy APT repository
+      - name: Deploy to apt branch
         env:
+          PROJECT_NAME: Valkey
+          PROJECT_SLUG: valkey
+          PROJECT_UPSTREAM_URL: https://github.com/valkey-io/valkey
+          PROJECT_LOGO_PATH: packages/valkey/logo.svg
+          APT_SUITE_PREFIX: valkey
+          APT_INSTALL_PACKAGE: valkey-server
+          NEW_RELEASES: ${{ needs.check-release.outputs.new_releases }}
+          ALL_RELEASES: ${{ needs.check-release.outputs.all_releases }}
+          LATEST_TAG: ${{ needs.check-release.outputs.latest_tag }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          MAX_ATTEMPTS=5
-
-          for attempt in $(seq 1 $MAX_ATTEMPTS); do
-            echo "=== Attempt ${attempt}/${MAX_ATTEMPTS} ==="
-
-            # ── Checkout the freshest apt branch state ───────────────────
-            rm -rf repo
-            if git ls-remote --exit-code --heads origin apt >/dev/null 2>&1; then
-              git fetch origin apt
-              git worktree add repo origin/apt
-            else
-              git worktree add --orphan -b apt repo
-            fi
-
-            # ── Remove reprepro-specific directories (no longer needed) ──
-            rm -rf repo/conf repo/db
-
-            # ── Ensure public.asc is present ─────────────────────────────
-            if [[ ! -f repo/public.asc ]]; then
-              gpg --armor --export "$GPG_KEY_ID" > repo/public.asc
-              echo "Generated public.asc"
-            fi
-
-            # ── Assemble reprepro ─────────────────────────────────────────
-            echo "$NEW_RELEASES" | jq -c '.[]' | while IFS= read -r release; do
-              TAG="$(echo "$release"   | jq -r '.tag')"
-              MAJOR="$(echo "$release" | jq -r '.major')"
-              echo "--- Assembling valkey${MAJOR} for release ${TAG} ---"
-              REPO_DIR="repo" \
-              ARTIFACTS_DIR="./downloaded-artifacts" \
-              RELEASE_TAG_FILTER="${TAG}" \
-              REPO_CODENAME="valkey${MAJOR}" \
-              REPO_ORIGIN="Valkey APT Repository" \
-              REPO_LABEL="Valkey" \
-              REPO_DESCRIPTION="Valkey APT Repository" \
-              GPG_KEY_ID="${GPG_KEY_ID}" \
-              PROJECT_SLUG="${PROJECT_SLUG}" \
-              bash scripts/assemble-apt-repo.sh
-            done
-
-            # ── Generate index.html ───────────────────────────────────────
-            BUILD_DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
-
-            PROJECT_NAME="Valkey" \
-            PROJECT_SLUG="valkey" \
-            PROJECT_UPSTREAM_URL="https://github.com/valkey-io/valkey" \
-            PROJECT_README_URL="${REPO_URL}/blob/main/packages/valkey/README.md" \
-            PROJECT_LOGO_PATH="packages/valkey/logo.svg" \
-            REPO_URL="${REPO_URL}" \
-            PAGES_URL="${PAGES_URL}" \
-            APT_BRANCH_URL="${REPO_URL}/tree/apt" \
-            RELEASES_JSON="${ALL_RELEASES}" \
-            APT_SUITE_PREFIX="valkey" \
-            APT_INSTALL_PACKAGE="valkey-server" \
-            MAINTAINER_EMAIL="packages@bil.co.ua" \
-            OUTPUT_PATH="./repo/valkey/index.html" \
-            BUILD_DATE="${BUILD_DATE}" \
-            bash scripts/generate-apt-index.sh
-
-            # ── Generate root index.html ──────────────────────────────────
-            REPO_TITLE="APT Package Repository" \
-            REPO_DESCRIPTION="Unofficial Debian/Ubuntu packages built automatically from upstream releases." \
-            REPO_URL="${REPO_URL}" \
-            PAGES_URL="${PAGES_URL}" \
-            MAINTAINER_EMAIL="packages@bil.co.ua" \
-            OUTPUT_PATH="./repo/index.html" \
-            BUILD_DATE="${BUILD_DATE}" \
-            bash scripts/generate-root-index.sh \
-              "valkey|Valkey|High-performance in-memory data store (Redis fork)"
-
-            # ── Commit ────────────────────────────────────────────────────
-            cd repo
-            git add -A
-            if git diff --cached --quiet; then
-              echo "Nothing to commit."
-              cd ..
-              git worktree remove repo --force
-              break
-            fi
-            git commit -m "Update APT repo for Valkey ${LATEST_TAG}"
-
-            # ── Push (non-force) ──────────────────────────────────────────
-            if git push origin HEAD:apt; then
-              echo "✓ Deployed on attempt ${attempt}"
-              cd ..
-              git worktree remove repo --force
-              break
-            fi
-
-            echo "Push rejected — another job pushed concurrently. Retrying..."
-            cd ..
-            git worktree remove repo --force
-
-            if [[ $attempt -eq $MAX_ATTEMPTS ]]; then
-              echo "ERROR: Failed to deploy after ${MAX_ATTEMPTS} attempts"
-              exit 1
-            fi
-
-            sleep $((attempt * 10))
-          done
+          ARTIFACTS_DIR: ./downloaded-artifacts
+        run: bash scripts/deploy-apt-repo.sh
