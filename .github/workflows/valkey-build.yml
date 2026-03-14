@@ -109,7 +109,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Upload built packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: packages-${{ matrix.release.tag }}-${{ matrix.os.codename }}-${{ matrix.arch }}
           path: ./build/${{ matrix.release.tag }}-${{ matrix.os.codename }}-${{ matrix.arch }}/*.deb
@@ -145,7 +145,7 @@ jobs:
           gpg --list-keys "$GPG_KEY_ID" > /dev/null 2>&1 || { echo "Key $GPG_KEY_ID not found after import" >&2; exit 1; }
 
       - name: Download all packages artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: packages-*
           path: ./downloaded-artifacts
