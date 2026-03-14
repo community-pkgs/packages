@@ -4,7 +4,7 @@
 
 This repository provides **unofficial** Debian/Ubuntu `.deb` packages for etcd,
 built automatically from official upstream releases and published as an APT repository
-via GitHub Pages.
+at [pkgs.bil.co.ua](https://pkgs.bil.co.ua) via Cloudflare R2.
 
 ---
 

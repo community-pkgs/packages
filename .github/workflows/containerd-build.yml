@@ -120,9 +120,10 @@ jobs:
 
       - name: Install s3sync
         run: |
-          curl -fsSL "https://github.com/nidor1998/s3sync/releases/latest/download/s3sync-linux-glibc2.28" \
-            -o /usr/local/bin/s3sync
-          chmod +x /usr/local/bin/s3sync
+          url=$(curl -fsSL https://api.github.com/repos/nidor1998/s3sync/releases/latest \
+            | jq -r '.assets[] | select(.name | endswith("linux-glibc2.28-x86_64.tar.gz")) | .browser_download_url')
+          curl -fsSL "$url" | tar -xz -C /tmp
+          sudo mv /tmp/s3sync /usr/local/bin/s3sync
           s3sync --version
 
       - name: Import GPG key

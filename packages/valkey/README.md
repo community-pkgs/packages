@@ -5,7 +5,7 @@ a community-driven fork of Redis, licensed under BSD 3-Clause.
 
 This repository provides **unofficial** Debian/Ubuntu `.deb` packages for Valkey,
 built automatically from official upstream releases and published as an APT repository
-via GitHub Pages.
+at [pkgs.bil.co.ua](https://pkgs.bil.co.ua) via Cloudflare R2.
 
 ---
 
@@ -36,13 +36,14 @@ via GitHub Pages.
 
 ```sh
 sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://github.com/community-pkgs/packages/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/valkey.gpg
+curl -fsSL https://pkgs.bil.co.ua/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/valkey.gpg
 ```
 
 ### 2. Add the repository
 
 ```sh
-echo "deb [signed-by=/etc/apt/keyrings/valkey.gpg] https://github.com/community-pkgs/packages valkey9 $(. /etc/os-release && echo "$VERSION_CODENAME")" | sudo tee /etc/apt/sources.list.d/valkey.list
+echo "deb [signed-by=/etc/apt/keyrings/valkey.gpg] https://pkgs.bil.co.ua valkey9 $(. /etc/os-release && echo "$VERSION_CODENAME")" \
+  | sudo tee /etc/apt/sources.list.d/valkey.list
 ```
 
 > **Note:** The suite name (`valkey9`, `valkey8`, …) reflects the Valkey **major version**.
@@ -54,12 +55,6 @@ This repository uses a **major-version-based APT layout**.
 
 Each Valkey major release is published in its own suite, such as `valkey9`.
 The Debian/Ubuntu distribution codename is used as the APT component and is inserted dynamically from the current system.
-
-Example:
-
-```sh
-echo "deb [signed-by=/etc/apt/keyrings/valkey.gpg] https://https://community-pkgs.github.io/packages valkey9 $(. /etc/os-release && echo "$VERSION_CODENAME")" | sudo tee /etc/apt/sources.list.d/valkey.list
-```
 
 This means:
 

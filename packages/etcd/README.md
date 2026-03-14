@@ -4,7 +4,7 @@
 
 This repository provides **unofficial** Debian/Ubuntu `.deb` packages for etcd,
 built automatically from official upstream releases and published as an APT repository
-via GitHub Pages.
+at [pkgs.bil.co.ua](https://pkgs.bil.co.ua) via Cloudflare R2.
 
 ---
 
@@ -33,13 +33,13 @@ dependencies, and work on any reasonably modern Debian or Ubuntu release
 
 ```sh
 sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://community-pkgs.github.io/packages/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/etcd.gpg
+curl -fsSL https://pkgs.bil.co.ua/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/etcd.gpg
 ```
 
 ### 2. Add the repository
 
 ```sh
-echo "deb [signed-by=/etc/apt/keyrings/etcd.gpg] https://community-pkgs.github.io/packages etcd main" \
+echo "deb [signed-by=/etc/apt/keyrings/etcd.gpg] https://pkgs.bil.co.ua etcd main" \
   | sudo tee /etc/apt/sources.list.d/etcd.list
 ```
 
