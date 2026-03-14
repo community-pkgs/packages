@@ -17,7 +17,7 @@
 #   SUITE_PREFIX      Prefix for suite discovery in multi mode. Default: <repo slug>
 #   SUITE_NAME        Exact suite name for single mode. Default: <repo slug>
 #   FORCE_TAG         Skip API call, build this tag exactly
-#   STATE_FILE        JSON state file. Default: last_release.json / last_release_<slug>.json
+#   STATE_FILE        JSON state file. Default: state/<slug>.json
 #   ALWAYS_BUILD      Force has_new=true. Default: false
 #   GITHUB_TOKEN      GitHub API token
 #   GITHUB_OUTPUT     Set by GitHub Actions runner
@@ -40,11 +40,7 @@ SUITE_NAME="${SUITE_NAME:-${_slug}}"
 ALWAYS_BUILD="${ALWAYS_BUILD:-false}"
 FORCE_TAG="${FORCE_TAG:-}"
 
-if [[ "$SINGLE_SUITE" == "true" ]]; then
-    STATE_FILE="${STATE_FILE:-last_release_${_slug}.json}"
-else
-    STATE_FILE="${STATE_FILE:-last_release.json}"
-fi
+STATE_FILE="${STATE_FILE:-state/${_slug}.json}"
 
 log()        { printf '[check-release] %s\n' "$*" >&2; }
 die()        { printf '[check-release] ERROR: %s\n' "$*" >&2; exit 1; }
