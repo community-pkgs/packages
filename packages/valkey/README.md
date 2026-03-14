@@ -63,7 +63,14 @@ This means:
 
 This layout keeps each Valkey major version on its own upgrade channel, so users do not move to a new major release unless they explicitly switch suites.
 
-### 3. Update and install
+### 3. Pin the repository
+
+```sh
+echo -e 'Package: *\nPin: release a=valkey9\nPin-Priority: 1001' \
+  | sudo tee /etc/apt/preferences.d/valkey
+```
+
+### 4. Update and install
 
 ```sh
 sudo apt update

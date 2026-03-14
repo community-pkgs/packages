@@ -50,7 +50,7 @@ echo "deb [signed-by=/etc/apt/keyrings/containerd.gpg] {{PAGES_URL}} containerd 
 ### 3. Pin the repository
 
 ```sh
-echo -e 'Package: *\nPin: release a=containerd\nPin-Priority: 990' \
+echo -e 'Package: *\nPin: release a=containerd\nPin-Priority: 1001' \
   | sudo tee /etc/apt/preferences.d/containerd
 ```
 

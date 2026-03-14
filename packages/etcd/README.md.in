@@ -46,7 +46,7 @@ echo "deb [signed-by=/etc/apt/keyrings/etcd.gpg] {{PAGES_URL}} etcd main" \
 ### 3. Pin the repository
 
 ```sh
-echo -e 'Package: *\nPin: release a=etcd\nPin-Priority: 990' \
+echo -e 'Package: *\nPin: release a=etcd\nPin-Priority: 1001' \
   | sudo tee /etc/apt/preferences.d/etcd
 ```
 

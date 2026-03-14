@@ -84,7 +84,7 @@ if [[ "$_release_count" -eq 1 ]]; then
 curl -fsSL ${PAGES_URL}/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/${PROJECT_SLUG}.gpg
 echo "deb [signed-by=/etc/apt/keyrings/${PROJECT_SLUG}.gpg] ${PAGES_URL} ${_single_suite} ${APT_COMPONENT:-\$(. /etc/os-release && echo "\${VERSION_CODENAME}")}" \\
   | sudo tee /etc/apt/sources.list.d/${PROJECT_SLUG}.list
-echo -e 'Package: *\nPin: release a=${_single_suite}\nPin-Priority: 990' \\
+echo -e 'Package: *\nPin: release a=${_single_suite}\nPin-Priority: 1001' \\
   | sudo tee /etc/apt/preferences.d/${PROJECT_SLUG}
 sudo apt update && sudo apt install ${APT_INSTALL_PACKAGE}</pre>
       </div>
@@ -135,7 +135,7 @@ else
 curl -fsSL ${PAGES_URL}/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/${PROJECT_SLUG}.gpg
 echo "deb [signed-by=/etc/apt/keyrings/${PROJECT_SLUG}.gpg] ${PAGES_URL} ${suite} ${APT_COMPONENT:-\$(. /etc/os-release && echo "\${VERSION_CODENAME}")}" \\
   | sudo tee /etc/apt/sources.list.d/${PROJECT_SLUG}.list
-echo -e 'Package: *\nPin: release a=${suite}\nPin-Priority: 990' \
+echo -e 'Package: *\nPin: release a=${suite}\nPin-Priority: 1001' \
   | sudo tee /etc/apt/preferences.d/${PROJECT_SLUG}
 sudo apt update && sudo apt install ${APT_INSTALL_PACKAGE}</pre>
       </div>
