@@ -8,6 +8,10 @@ case "$1" in
 
         mkdir -p /etc/containerd
         chmod 0755 /etc/containerd
+
+        if [ ! -f /etc/containerd/config.toml ]; then
+            containerd config default > /etc/containerd/config.toml
+        fi
         ;;
 esac
 

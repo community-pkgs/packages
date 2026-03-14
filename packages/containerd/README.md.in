@@ -74,10 +74,10 @@ sudo apt install containerd containerd-tools
 
 ---
 
-## Post-install: generate default configuration
+## Configuration
 
-containerd will run with built-in defaults when no configuration file is present.
-To generate and customise the full default configuration:
+A default configuration file is generated at `/etc/containerd/config.toml`
+during installation. To regenerate it:
 
 ```sh
 sudo containerd config default | sudo tee /etc/containerd/config.toml
@@ -113,7 +113,7 @@ sudo systemctl start containerd
 - Installs the `containerd` binary to `/usr/bin/`
 - Installs the `containerd-shim-runc-v2` shim to `/usr/bin/`
 - Default state directory: `/var/lib/containerd/`
-- Configuration directory: `/etc/containerd/` (empty by default — see above)
+- Configuration file: `/etc/containerd/config.toml` (generated on first install)
 - Unix socket: `/run/containerd/containerd.sock`
 - systemd unit: `containerd.service` (installed but **not enabled** by default)
 - Runs as **root** — required for namespace and cgroup management
