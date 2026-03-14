@@ -1,0 +1,31 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        if ! getent group etcd > /dev/null 2>&1; then
+            addgroup --system etcd
+        fi
+
+        if ! getent passwd etcd > /dev/null 2>&1; then
+            adduser --system --ingroup etcd --home /var/lib/etcd \
+                --no-create-home --shell /usr/sbin/nologin \
+                --gecos "etcd daemon" etcd
+        fi
+
+        chown etcd:etcd /var/lib/etcd
+        chmod 0700 /var/lib/etcd
+
+        chown etcd:etcd /var/log/etcd
+        chmod 0750 /var/log/etcd
+
+        if [ -d /etc/etcd ]; then
+            chown root:etcd /etc/etcd
+            chmod 0750 /etc/etcd
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

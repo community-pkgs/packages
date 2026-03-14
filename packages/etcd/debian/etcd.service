@@ -1,0 +1,54 @@
+[Unit]
+Description=etcd - A distributed, reliable key-value store
+Documentation=https://etcd.io/docs/
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=etcd
+Group=etcd
+ExecStart=/usr/bin/etcd --config-file=/etc/etcd/etcd.conf.yml
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+TimeoutStopSec=30
+
+UMask=077
+LimitNOFILE=65536
+LimitMEMLOCK=infinity
+
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateUsers=yes
+NoNewPrivileges=yes
+
+ReadWritePaths=-/var/lib/etcd
+ReadWritePaths=-/var/log/etcd
+
+CapabilityBoundingSet=
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+RemoveIPC=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+NoExecPaths=/
+ExecPaths=/usr/bin/etcd /usr/lib /lib
+
+[Install]
+WantedBy=multi-user.target

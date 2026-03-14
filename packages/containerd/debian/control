@@ -1,0 +1,34 @@
+Source: containerd
+Section: admin
+Priority: optional
+Maintainer: community-pkgs <https://github.com/community-pkgs/packages>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Homepage: https://containerd.io
+
+Package: containerd
+Architecture: any
+Depends:
+ ${misc:Depends},
+Recommends:
+ containerd-tools (= ${binary:Version}),
+ runc,
+Description: Industry-standard container runtime (daemon)
+ containerd is an industry-standard container runtime with an emphasis on
+ simplicity, robustness, and portability. It is available as a daemon for
+ Linux and Windows, which can manage the complete container lifecycle of its
+ host system: image transfer and storage, container execution and supervision,
+ low-level storage and network attachments, etc.
+ .
+ This package contains the containerd daemon and its runtime shim(s).
+
+Package: containerd-tools
+Architecture: any
+Depends:
+ ${misc:Depends},
+Description: Industry-standard container runtime (client tools)
+ containerd is an industry-standard container runtime with an emphasis on
+ simplicity, robustness, and portability.
+ .
+ This package contains ctr, the low-level containerd CLI, and
+ containerd-stress, the containerd stress-testing utility.

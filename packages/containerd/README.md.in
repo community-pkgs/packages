@@ -1,0 +1,145 @@
+# containerd APT Repository
+
+[containerd](https://containerd.io) is an industry-standard container runtime with an emphasis on
+simplicity, robustness, and portability. It manages the complete container lifecycle of its host
+system: image transfer and storage, container execution and supervision, low-level storage and
+network attachments, and more. containerd is a graduated CNCF project and the runtime used
+underneath Docker, Kubernetes (via CRI), and many other container platforms.
+
+This repository provides **unofficial** Debian/Ubuntu `.deb` packages for containerd,
+built automatically from official upstream releases and published as an APT repository
+via GitHub Pages.
+
+---
+
+## Compatibility
+
+This package uses the official pre-built upstream binaries from
+[containerd/containerd releases](https://github.com/containerd/containerd/releases).
+The binaries are statically compiled Go executables with no distribution-specific
+dependencies, and work on any reasonably modern Debian or Ubuntu release
+(`amd64` and `arm64`).
+
+---
+
+## Packages
+
+| Package              | Description                                                         |
+|----------------------|---------------------------------------------------------------------|
+| `containerd`         | The containerd daemon and runtime shim(s)                           |
+| `containerd-tools`   | Client tools: `ctr`, `containerd-stress`                           |
+
+---
+
+## Installation
+
+### 1. Add the GPG signing key
+
+```sh
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL {{PAGES_URL}}/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/containerd.gpg
+```
+
+### 2. Add the repository
+
+```sh
+echo "deb [signed-by=/etc/apt/keyrings/containerd.gpg] {{PAGES_URL}} containerd main" \
+  | sudo tee /etc/apt/sources.list.d/containerd.list
+```
+
+### 3. Pin the repository
+
+```sh
+echo -e 'Package: *\nPin: release a=containerd\nPin-Priority: 990' \
+  | sudo tee /etc/apt/preferences.d/containerd
+```
+
+### 4. Update and install
+
+```sh
+sudo apt update
+```
+
+Install the runtime:
+
+```sh
+sudo apt install containerd
+```
+
+Install the runtime and client tools:
+
+```sh
+sudo apt install containerd containerd-tools
+```
+
+---
+
+## Post-install: generate default configuration
+
+containerd will run with built-in defaults when no configuration file is present.
+To generate and customise the full default configuration:
+
+```sh
+sudo containerd config default | sudo tee /etc/containerd/config.toml
+sudo systemctl restart containerd
+```
+
+> **Kubernetes users:** you will likely want to set the cgroup driver to `systemd`:
+> ```sh
+> sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+> sudo systemctl restart containerd
+> ```
+
+---
+
+## Starting the service
+
+The service is installed but **not enabled** by default.
+
+```sh
+# Enable and start now
+sudo systemctl enable --now containerd
+
+# Or start without enabling at boot
+sudo systemctl start containerd
+```
+
+---
+
+## Package details
+
+### `containerd`
+
+- Installs the `containerd` binary to `/usr/bin/`
+- Installs the `containerd-shim-runc-v2` shim to `/usr/bin/`
+- Default state directory: `/var/lib/containerd/`
+- Configuration directory: `/etc/containerd/` (empty by default — see above)
+- Unix socket: `/run/containerd/containerd.sock`
+- systemd unit: `containerd.service` (installed but **not enabled** by default)
+- Runs as **root** — required for namespace and cgroup management
+
+### `containerd-tools`
+
+- `ctr` — low-level containerd CLI for direct interaction with the daemon
+- `containerd-stress` — stress-testing utility for the containerd daemon
+
+> **Note:** `ctr` is a low-level debugging and administrative tool.
+> For day-to-day use, prefer higher-level tools such as `nerdctl` or `crictl`.
+
+---
+
+## Notes on `runc`
+
+containerd delegates container process creation to [runc](https://github.com/opencontainers/runc)
+via `containerd-shim-runc-v2`. The `runc` binary must be installed separately:
+
+```sh
+sudo apt install runc
+```
+
+---
+
+## Build details
+
+- Packages use the official pre-built upstream binaries from [containerd/containerd releases](https://github.com/containerd/containerd/releases)
+- Packages are GPG-signed

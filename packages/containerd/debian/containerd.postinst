@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        mkdir -p /var/lib/containerd
+        chmod 0710 /var/lib/containerd
+
+        mkdir -p /etc/containerd
+        chmod 0755 /etc/containerd
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

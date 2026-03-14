@@ -1,0 +1,40 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_installsystemd:
+	dh_installsystemd --package=etcd --name=etcd --no-enable --no-start
+
+override_dh_auto_configure:
+	@true
+
+override_dh_auto_build:
+	@true
+
+override_dh_auto_test:
+	@true
+
+override_dh_auto_install:
+	install -D -m 755 binaries/etcd \
+		$(CURDIR)/debian/etcd/usr/bin/etcd
+	install -D -m 755 binaries/etcdctl \
+		$(CURDIR)/debian/etcd-client/usr/bin/etcdctl
+	install -D -m 755 binaries/etcdutl \
+		$(CURDIR)/debian/etcd-client/usr/bin/etcdutl
+
+	install -D -m 644 debian/etcd.service \
+		$(CURDIR)/debian/etcd/lib/systemd/system/etcd.service
+
+	# Take upstream sample config, patch defaults for packaging.
+	cp binaries/etcd.conf.yml.sample $(CURDIR)/debian/etcd.conf.yml
+	sed -i \
+		-e 's|^data-dir:$$|data-dir: /var/lib/etcd|' \
+		-e 's|^enable-pprof: true|enable-pprof: false|' \
+		-e 's|^log-level: debug|log-level: info|' \
+		$(CURDIR)/debian/etcd.conf.yml
+	install -D -m 640 $(CURDIR)/debian/etcd.conf.yml \
+		$(CURDIR)/debian/etcd/etc/etcd/etcd.conf.yml
+
+	install -d $(CURDIR)/debian/etcd/var/lib/etcd
+	install -d $(CURDIR)/debian/etcd/var/log/etcd

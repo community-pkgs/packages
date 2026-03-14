@@ -1,0 +1,3 @@
+valkey|Valkey|High-performance in-memory data store (Redis fork)
+etcd|etcd|Distributed reliable key-value store for Kubernetes
+containerd|containerd|Industry-standard container runtime (CNCF graduated project)

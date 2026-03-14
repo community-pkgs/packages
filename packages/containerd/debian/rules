@@ -1,0 +1,34 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_installsystemd:
+	dh_installsystemd --package=containerd --name=containerd --no-enable --no-start
+
+override_dh_auto_configure:
+	@true
+
+override_dh_auto_build:
+	@true
+
+override_dh_auto_test:
+	@true
+
+override_dh_auto_install:
+	install -D -m 755 binaries/containerd \
+		$(CURDIR)/debian/containerd/usr/bin/containerd
+	install -D -m 755 binaries/containerd-shim-runc-v2 \
+		$(CURDIR)/debian/containerd/usr/bin/containerd-shim-runc-v2
+	if [ -f binaries/containerd-shim-runc-v1 ]; then \
+		install -D -m 755 binaries/containerd-shim-runc-v1 \
+			$(CURDIR)/debian/containerd/usr/bin/containerd-shim-runc-v1; \
+	fi
+	install -D -m 755 binaries/ctr \
+		$(CURDIR)/debian/containerd-tools/usr/bin/ctr
+	if [ -f binaries/containerd-stress ]; then \
+		install -D -m 755 binaries/containerd-stress \
+			$(CURDIR)/debian/containerd-tools/usr/bin/containerd-stress; \
+	fi
+	install -d $(CURDIR)/debian/containerd/var/lib/containerd
+	install -d $(CURDIR)/debian/containerd/etc/containerd

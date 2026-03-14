@@ -1,0 +1,31 @@
+Source: etcd
+Section: admin
+Priority: optional
+Maintainer: community-pkgs <https://github.com/community-pkgs/packages>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Homepage: https://etcd.io
+
+Package: etcd
+Architecture: any
+Depends:
+ adduser,
+ ${misc:Depends},
+Recommends: etcd-client
+Description: Distributed reliable key-value store (server)
+ etcd is a distributed, reliable key-value store for the most critical data
+ of a distributed system. It is used as the backend storage for Kubernetes
+ cluster state, service discovery, and distributed configuration.
+ .
+ This package contains the etcd server daemon.
+
+Package: etcd-client
+Architecture: any
+Depends:
+ ${misc:Depends},
+Description: Distributed reliable key-value store (client tools)
+ etcd is a distributed, reliable key-value store for the most critical data
+ of a distributed system.
+ .
+ This package contains etcdctl (the etcd CLI client) and etcdutl (the
+ offline etcd utility tool).
