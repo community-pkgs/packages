@@ -1,0 +1,90 @@
+# runc APT Repository
+
+[runc](https://github.com/opencontainers/runc) is a CLI tool for spawning and running containers according to the OCI specification. It is the low-level container runtime used underneath containerd, Docker, Podman, and many other container platforms.
+
+This repository provides **unofficial** Debian/Ubuntu `.deb` packages for runc,
+built automatically from official upstream releases and published as an APT repository
+at [pkgs.bil.co.ua](https://pkgs.bil.co.ua) via Cloudflare R2.
+
+---
+
+## Compatibility
+
+This package uses the official pre-built upstream binaries from
+[opencontainers/runc releases](https://github.com/opencontainers/runc/releases).
+The binaries are statically compiled Go executables with no distribution-specific
+dependencies, and work on any reasonably modern Debian or Ubuntu release
+(`amd64` and `arm64`).
+
+---
+
+## Packages
+
+| Package | Description                                      |
+|---------|--------------------------------------------------|
+| `runc`  | OCI container runtime binary (`/usr/sbin/runc`)  |
+
+---
+
+## Installation
+
+### 1. Add the GPG signing key
+
+```sh
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL {{PAGES_URL}}/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/runc.gpg
+```
+
+### 2. Add the repository
+
+```sh
+echo "deb [signed-by=/etc/apt/keyrings/runc.gpg] {{PAGES_URL}} runc main" \
+  | sudo tee /etc/apt/sources.list.d/runc.list
+```
+
+### 3. Pin the repository
+
+```sh
+echo -e 'Package: *\nPin: release a=runc\nPin-Priority: 1001' \
+  | sudo tee /etc/apt/preferences.d/runc
+```
+
+### 4. Update and install
+
+```sh
+sudo apt update
+sudo apt install runc
+```
+
+---
+
+## Package details
+
+### `runc`
+
+- Installs the `runc` binary to `/usr/sbin/`
+- No configuration files or systemd units — runc is invoked directly by higher-level runtimes such as containerd
+- Runs as **root** — required for namespace and cgroup management
+
+---
+
+## Usage
+
+runc is typically not invoked directly by end users. It is called automatically by container runtimes:
+
+- **containerd** uses `containerd-shim-runc-v2` to delegate container process creation to runc
+- **Docker** uses runc as its default OCI runtime via containerd
+- **Podman** can use runc as its OCI runtime
+
+To verify the installed version:
+
+```sh
+runc --version
+```
+
+---
+
+## Build details
+
+- Packages use the official pre-built upstream binaries from [opencontainers/runc releases](https://github.com/opencontainers/runc/releases)
+- Packages are GPG-signed

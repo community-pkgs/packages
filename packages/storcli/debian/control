@@ -1,0 +1,25 @@
+Source: storcli
+Section: admin
+Priority: optional
+Maintainer: community-pkgs <https://github.com/community-pkgs/packages>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Homepage: https://www.broadcom.com/support/download-search?dk=StorCLI
+
+Package: storcli
+Architecture: any
+Depends:
+ ${misc:Depends},
+Description: Broadcom MegaRAID StorCLI storage management tool
+ StorCLI is the command-line management tool for Broadcom MegaRAID RAID
+ controllers. It provides complete control over RAID configuration and
+ monitoring, including creating and managing virtual drives, checking drive
+ health, monitoring controller status, and updating firmware.
+ .
+ StorCLI is the successor to MegaCLI and supports all Broadcom/LSI MegaRAID
+ SAS/SATA/NVMe controllers.
+ .
+ This package contains the storcli64 binary installed as /usr/sbin/storcli.
+ .
+ NOTE: This is proprietary software distributed by Broadcom under the
+ Broadcom End User License Agreement. Redistribution is not permitted.

@@ -1,8 +1,8 @@
-name: etcd Releases
+name: runc Releases
 
 on:
   schedule:
-    - cron: "0 2 * * *"
+    - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -36,9 +36,9 @@ jobs:
         id: check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          UPSTREAM_REPO: etcd-io/etcd
+          UPSTREAM_REPO: opencontainers/runc
           SINGLE_SUITE: "true"
-          SUITE_NAME: etcd
+          SUITE_NAME: runc
           FORCE_TAG: ${{ github.event.inputs.release_tag }}
           ALWAYS_BUILD: ${{ github.event_name == 'workflow_dispatch' }}
         run: bash scripts/check-release.sh
@@ -48,12 +48,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add state/etcd.json
+          git add state/runc.json
 
           if git diff --cached --quiet; then
             echo "No changes to commit for release state"
           else
-            git commit -m "chore: update last processed etcd release to ${{ steps.check.outputs.latest_tag }}"
+            git commit -m "chore: update last processed runc release to ${{ steps.check.outputs.latest_tag }}"
             git push
           fi
 
@@ -80,7 +80,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: packages/etcd/Dockerfile
+          file: packages/runc/Dockerfile
           platforms: linux/${{ matrix.arch }}
           build-args: |
             RELEASE_TAG=${{ matrix.release.tag }}
@@ -143,13 +143,13 @@ jobs:
 
       - name: Deploy to R2
         env:
-          PROJECT_NAME: etcd
-          PROJECT_SLUG: etcd
-          PROJECT_UPSTREAM_URL: https://github.com/etcd-io/etcd
-          PROJECT_LOGO_PATH: packages/etcd/logo.svg
-          APT_SUITE_PREFIX: etcd
+          PROJECT_NAME: runc
+          PROJECT_SLUG: runc
+          PROJECT_UPSTREAM_URL: https://github.com/opencontainers/runc
+          PROJECT_LOGO_PATH: packages/runc/logo.svg
+          APT_SUITE_PREFIX: runc
           APT_COMPONENT: main
-          APT_INSTALL_PACKAGE: etcd
+          APT_INSTALL_PACKAGE: runc
           NEW_RELEASES: ${{ needs.check-release.outputs.new_releases }}
           ALL_RELEASES: ${{ needs.check-release.outputs.all_releases }}
           LATEST_TAG: ${{ needs.check-release.outputs.latest_tag }}

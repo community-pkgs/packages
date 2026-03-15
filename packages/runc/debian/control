@@ -1,0 +1,21 @@
+Source: runc
+Section: admin
+Priority: optional
+Maintainer: community-pkgs <https://github.com/community-pkgs/packages>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Homepage: https://github.com/opencontainers/runc
+
+Package: runc
+Architecture: any
+Depends:
+ ${misc:Depends},
+Description: Open Container Initiative (OCI) container runtime
+ runc is a CLI tool for spawning and running containers according to the OCI
+ specification. It is the low-level container runtime used by containerd,
+ Docker, Podman, and many other container platforms to create and manage
+ container processes on Linux.
+ .
+ runc implements the OCI Runtime Specification and supports features such as
+ namespaces, cgroups, capabilities, and Linux security modules (AppArmor,
+ SELinux, seccomp).

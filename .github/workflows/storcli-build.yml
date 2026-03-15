@@ -1,12 +1,16 @@
-name: etcd Releases
+name: storcli Releases
 
 on:
   schedule:
-    - cron: "0 2 * * *"
+    - cron: "0 5 * * *"
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Optional custom release tag to build (if empty, use latest)"
+        description: "Optional: force build this tag (e.g. 007.3603.0000.0000). If empty, use latest from Broadcom API."
+        required: false
+        default: ""
+      release_url:
+        description: "Required when release_tag is set: direct ZIP URL from Broadcom."
         required: false
         default: ""
 
@@ -27,6 +31,7 @@ jobs:
       new_releases: ${{ steps.check.outputs.new_releases }}
       all_releases: ${{ steps.check.outputs.all_releases }}
       latest_tag: ${{ steps.check.outputs.latest_tag }}
+      latest_url: ${{ steps.check.outputs.latest_url }}
 
     steps:
       - name: Checkout repository
@@ -35,25 +40,23 @@ jobs:
       - name: Fetch and check releases
         id: check
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          UPSTREAM_REPO: etcd-io/etcd
-          SINGLE_SUITE: "true"
-          SUITE_NAME: etcd
+          BROADCOM_DOC_ID: "1232745486"
           FORCE_TAG: ${{ github.event.inputs.release_tag }}
+          FORCE_URL: ${{ github.event.inputs.release_url }}
           ALWAYS_BUILD: ${{ github.event_name == 'workflow_dispatch' }}
-        run: bash scripts/check-release.sh
+        run: bash scripts/check-release-broadcom.sh
 
       - name: Commit release state
         if: github.event_name == 'schedule' && steps.check.outputs.latest_tag != ''
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add state/etcd.json
+          git add state/storcli.json
 
           if git diff --cached --quiet; then
             echo "No changes to commit for release state"
           else
-            git commit -m "chore: update last processed etcd release to ${{ steps.check.outputs.latest_tag }}"
+            git commit -m "chore: update last processed storcli release to ${{ steps.check.outputs.latest_tag }}"
             git push
           fi
 
@@ -64,7 +67,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        release: ${{ fromJson(needs.check-release.outputs.new_releases) }}
         arch:
           - amd64
           - arm64
@@ -80,22 +82,21 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: packages/etcd/Dockerfile
+          file: packages/storcli/Dockerfile
           platforms: linux/${{ matrix.arch }}
           build-args: |
-            RELEASE_TAG=${{ matrix.release.tag }}
+            RELEASE_TAG=${{ needs.check-release.outputs.latest_tag }}
+            RELEASE_URL=${{ needs.check-release.outputs.latest_url }}
             ARCH=${{ matrix.arch }}
-          secrets: |
-            github_token=${{ secrets.GITHUB_TOKEN }}
-          outputs: type=local,dest=./build/${{ matrix.release.tag }}-main-${{ matrix.arch }}
+          outputs: type=local,dest=./build/main-${{ matrix.arch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Upload built packages
         uses: actions/upload-artifact@v7
         with:
-          name: packages-${{ matrix.release.tag }}-main-${{ matrix.arch }}
-          path: ./build/${{ matrix.release.tag }}-main-${{ matrix.arch }}/*.deb
+          name: packages-${{ needs.check-release.outputs.latest_tag }}-main-${{ matrix.arch }}
+          path: ./build/main-${{ matrix.arch }}/*.deb
           retention-days: 1
 
   create-repo:
@@ -143,13 +144,14 @@ jobs:
 
       - name: Deploy to R2
         env:
-          PROJECT_NAME: etcd
-          PROJECT_SLUG: etcd
-          PROJECT_UPSTREAM_URL: https://github.com/etcd-io/etcd
-          PROJECT_LOGO_PATH: packages/etcd/logo.svg
-          APT_SUITE_PREFIX: etcd
+          TAG: ${{ needs.check-release.outputs.latest_tag }}
+          PROJECT_NAME: storcli
+          PROJECT_SLUG: storcli
+          PROJECT_UPSTREAM_URL: https://www.broadcom.com/support/download-search?dk=StorCLI
+          PROJECT_LOGO_PATH: packages/storcli/logo.svg
+          APT_SUITE_PREFIX: storcli
           APT_COMPONENT: main
-          APT_INSTALL_PACKAGE: etcd
+          APT_INSTALL_PACKAGE: storcli
           NEW_RELEASES: ${{ needs.check-release.outputs.new_releases }}
           ALL_RELEASES: ${{ needs.check-release.outputs.all_releases }}
           LATEST_TAG: ${{ needs.check-release.outputs.latest_tag }}

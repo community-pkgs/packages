@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	@true
+
+override_dh_auto_build:
+	@true
+
+override_dh_auto_test:
+	@true
+
+override_dh_auto_install:
+	install -D -m 755 binaries/runc \
+		$(CURDIR)/debian/runc/usr/sbin/runc

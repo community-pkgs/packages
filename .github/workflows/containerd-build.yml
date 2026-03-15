@@ -44,7 +44,7 @@ jobs:
         run: bash scripts/check-release.sh
 
       - name: Commit release state
-        if: github.event_name == 'schedule' && steps.check.outputs.has_new == 'true'
+        if: github.event_name == 'schedule' && steps.check.outputs.latest_tag != ''
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

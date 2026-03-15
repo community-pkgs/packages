@@ -44,7 +44,7 @@ jobs:
         run: bash scripts/check-release.sh
 
       - name: Commit release state and generated README
-        if: github.event_name == 'schedule' && steps.check.outputs.has_new == 'true'
+        if: github.event_name == 'schedule' && steps.check.outputs.latest_tag != ''
         run: |
           PAGES_URL="https://pkgs.bil.co.ua" \
           bash scripts/generate-readme.sh \

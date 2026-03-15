@@ -1,3 +1,5 @@
 containerd|containerd|Industry-standard container runtime (CNCF graduated project)
 etcd|etcd|Distributed reliable key-value store for Kubernetes
+runc|runc|OCI container runtime used by containerd and Docker
+storcli|storcli|Broadcom MegaRAID StorCLI storage management tool
 valkey|Valkey|High-performance in-memory data store (Redis fork)
