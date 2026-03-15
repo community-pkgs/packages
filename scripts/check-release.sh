@@ -236,10 +236,9 @@ if [[ "$SINGLE_SUITE" == "true" ]]; then
         has_new="true"
         log "ALWAYS_BUILD=true — forcing build"
     else
-        state_tag="$(load_state_single)"
-        log "State file tag: '${state_tag}'"
+        log "State file tag: '${deployed_tag}'"
 
-        if [[ "$latest_tag" != "$state_tag" ]]; then
+        if [[ "$latest_tag" != "$deployed_tag" ]]; then
             has_new="true"
             save_state_single "$latest_tag"
         else

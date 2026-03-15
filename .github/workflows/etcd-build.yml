@@ -60,7 +60,12 @@ jobs:
             echo "No changes to commit for release state or generated README"
           else
             git commit -m "chore: update last processed etcd release to ${{ steps.check.outputs.latest_tag }}"
-            git push
+            for attempt in 1 2 3; do
+              git push && break
+              echo "Push failed (attempt $attempt), rebasing and retrying..."
+              sleep $((attempt * 2))
+              git pull --rebase
+            done
           fi
 
   build-packages:
@@ -128,9 +133,12 @@ jobs:
 
       - name: Install s3sync
         run: |
-          url=$(curl -fsSL https://api.github.com/repos/nidor1998/s3sync/releases/latest \
-            | jq -r '.assets[] | select(.name | endswith("linux-glibc2.28-x86_64.tar.gz")) | .browser_download_url')
-          curl -fsSL "$url" | tar -xz -C /tmp
+          S3SYNC_VERSION="1.56.1"
+          S3SYNC_SHA256="6540376ab3566ad57b963c97274bd42381a66603f62b3e0c07c6504bddb4359d"
+          curl -fsSL "https://github.com/nidor1998/s3sync/releases/download/v${S3SYNC_VERSION}/s3sync-${S3SYNC_VERSION}-linux-glibc2.28-x86_64.tar.gz" \
+            -o /tmp/s3sync.tar.gz
+          echo "${S3SYNC_SHA256}  /tmp/s3sync.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/s3sync.tar.gz -C /tmp
           sudo mv /tmp/s3sync /usr/local/bin/s3sync
           s3sync --version
 
