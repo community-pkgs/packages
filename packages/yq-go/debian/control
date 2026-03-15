@@ -1,0 +1,22 @@
+Source: yq-go
+Section: utils
+Priority: optional
+Maintainer: community-pkgs <https://github.com/community-pkgs/packages>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Homepage: https://github.com/mikefarah/yq
+
+Package: yq-go
+Architecture: any
+Depends:
+ ${misc:Depends},
+Conflicts: yq
+Replaces: yq
+Provides: yq
+Description: Portable command-line YAML, JSON, XML, CSV and properties processor
+ yq is a lightweight and portable command-line tool for processing YAML,
+ JSON, XML, CSV, TOML and properties files. It uses a jq-like syntax for
+ querying, transforming and updating structured data files.
+ .
+ This package provides the Go implementation of yq by Mike Farah and replaces
+ the Python-based yq package.
