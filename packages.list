@@ -2,4 +2,5 @@ containerd|containerd|Industry-standard container runtime (CNCF graduated projec
 etcd|etcd|Distributed reliable key-value store for Kubernetes
 runc|runc|OCI container runtime used by containerd and Docker
 storcli|storcli|Broadcom MegaRAID StorCLI storage management tool
-valkey|Valkey|High-performance in-memory data store (Redis fork)
+valkey|valkey|High-performance in-memory data store (Redis fork)
+yq-go|yq-go|Portable command-line YAML, JSON, XML, CSV, TOML, INI, HCL and properties processor  (Go implementation by Mike Farah)
