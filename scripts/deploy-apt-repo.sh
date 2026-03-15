@@ -137,7 +137,7 @@ done
 
 # ── Package index page ──
 RELEASES_JSON="${ALL_RELEASES}" \
-OUTPUT_PATH="./repo/${PROJECT_SLUG}/index.html" \
+OUTPUT_PATH="./repo/pages/${PROJECT_SLUG}.html" \
 bash scripts/generate-apt-index.sh
 
 # ── Root index ──

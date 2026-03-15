@@ -42,8 +42,8 @@ for entry in "$@"; do
   [[ -n "$name" ]] || name="$slug"
   [[ -n "$desc" ]] || desc="APT packages for ${name}"
 
-  package_url="${PAGES_URL}/${slug}/index.html"
-  package_rel_url="${slug}/index.html"
+  package_url="${PAGES_URL}/pages/${slug}.html"
+  package_rel_url="pages/${slug}.html"
 
   _logo_path="${PACKAGES_DIR}/${slug}/logo.svg"
   if [[ -f "$_logo_path" ]]; then
