@@ -1,0 +1,99 @@
+# yq-go APT Repository
+
+[yq](https://github.com/mikefarah/yq) is a portable command-line tool for processing YAML, JSON, XML, CSV, TOML and properties files. It uses a jq-like syntax for querying, transforming and updating structured data.
+
+This repository provides **unofficial** Debian/Ubuntu `.deb` packages for yq (Go implementation by Mike Farah),
+built automatically from official upstream releases and published as an APT repository
+at [pkgs.bil.co.ua](https://pkgs.bil.co.ua) via Cloudflare R2.
+
+> **Note:** This package is named `yq-go` to avoid conflicts with the Python-based
+> [`yq`](https://github.com/kislyuk/yq) package available in official Debian/Ubuntu repositories.
+> Both `yq-go` and `yq` commands are installed.
+
+---
+
+## Compatibility
+
+This package uses the official pre-built upstream binaries from
+[mikefarah/yq releases](https://github.com/mikefarah/yq/releases).
+The binaries are statically compiled Go executables with no distribution-specific
+dependencies, and work on any reasonably modern Debian or Ubuntu release
+(`amd64` and `arm64`).
+
+---
+
+## Packages
+
+| Package  | Description                                                        |
+|----------|--------------------------------------------------------------------|
+| `yq-go`  | YAML/JSON/XML processor binary (`/usr/bin/yq-go`, `/usr/bin/yq`)  |
+
+---
+
+## Installation
+
+### 1. Add the GPG signing key
+
+```sh
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://pkgs.bil.co.ua/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/yq-go.gpg
+```
+
+### 2. Add the repository
+
+```sh
+echo "deb [signed-by=/etc/apt/keyrings/yq-go.gpg] https://pkgs.bil.co.ua yq-go main" \
+  | sudo tee /etc/apt/sources.list.d/yq-go.list
+```
+
+### 3. Pin the repository
+
+```sh
+echo -e 'Package: *\nPin: release a=yq-go\nPin-Priority: 1001' \
+  | sudo tee /etc/apt/preferences.d/yq-go
+```
+
+### 4. Update and install
+
+```sh
+sudo apt update
+sudo apt install yq-go
+```
+
+---
+
+## Package details
+
+### `yq-go`
+
+- Installs the `yq` binary to `/usr/bin/yq-go`
+- Creates a symlink `/usr/bin/yq` → `/usr/bin/yq-go`
+- Statically linked — no runtime dependencies
+- Supports YAML, JSON, XML, CSV, TOML and properties formats
+
+---
+
+## Usage
+
+```sh
+# Read a value
+yq '.name' file.yaml
+
+# Update a value in-place
+yq -i '.version = "1.2.3"' file.yaml
+
+# Convert YAML to JSON
+yq -o=json file.yaml
+
+# Merge two YAML files
+yq '. * load("override.yaml")' base.yaml
+```
+
+Full documentation: [mikefarah.gitbook.io/yq](https://mikefarah.gitbook.io/yq/)
+
+---
+
+## Build details
+
+- Packages use the official pre-built upstream binaries from [mikefarah/yq releases](https://github.com/mikefarah/yq/releases)
+- Packages are GPG-signed

@@ -60,6 +60,9 @@ fi
 
 PAGE_TITLE="${PROJECT_NAME} APT Repository"
 
+# latest tag for version badge
+_latest_tag="$(echo "$RELEASES_JSON" | jq -r '[sort_by(.major | if . == "" then 0 else tonumber end) | reverse[]][0].tag')"
+
 # Helper: derive a stable tab identifier from a release entry.
 # For multi-major (major != ""), use the major number.
 # For single-suite (major == ""), use "latest".
@@ -154,6 +157,8 @@ ENDPANEL
 fi
 
 # logo + favicon
+_favicon_href='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>'
+
 if [[ -n "${PROJECT_LOGO_PATH:-}" && -f "$PROJECT_LOGO_PATH" ]]; then
   _logo_css='    .logo-icon {
       width: 42px; height: 42px;
@@ -162,7 +167,6 @@ if [[ -n "${PROJECT_LOGO_PATH:-}" && -f "$PROJECT_LOGO_PATH" ]]; then
     }
     .logo-icon svg { width: 42px; height: 42px; display: block; }'
   _logo_html="$(cat "$PROJECT_LOGO_PATH")"
-  _favicon_href="data:image/svg+xml,$(sed 's/#/%23/g' "$PROJECT_LOGO_PATH" | tr -d '\n')"
 else
   _logo_css='    .logo-icon {
       width: 42px; height: 42px;
@@ -172,7 +176,6 @@ else
       font-size: 1.4rem;
     }'
   _logo_html='📦'
-  _favicon_href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📦</text></svg>'
 fi
 
 mkdir -p "$(dirname "$OUTPUT_PATH")"
@@ -214,6 +217,20 @@ cat > "$OUTPUT_PATH" <<HTML
     }
 ${_logo_css}
     h1 { font-size: 1.55rem; font-weight: 700; color: #f0f6fc; }
+    .version-badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      color: #79c0ff;
+      background: #1f3a5c;
+      border: 1px solid #1f6feb;
+      border-radius: 20px;
+      padding: 0.2rem 0.6rem;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
     .subtitle {
       color: #8b949e;
       font-size: 0.95rem;
@@ -312,7 +329,7 @@ ${_tab_css_rules}
   <main class="card">
     <div class="logo">
       <div class="logo-icon">${_logo_html}</div>
-      <h1>${PAGE_TITLE}</h1>
+      <h1>${PAGE_TITLE}<span class="version-badge">v${_latest_tag}</span></h1>
     </div>
 
     <p class="subtitle">

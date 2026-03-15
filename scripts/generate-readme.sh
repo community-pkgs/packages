@@ -74,9 +74,9 @@ substitute_env_placeholders() {
 
 template_content="$(cat "$TEMPLATE_PATH")"
 
+has_placeholder=0
 case "$template_content" in
-    *"$PLACEHOLDER"*) ;;
-    *) die "Placeholder not found in template: $PLACEHOLDER" ;;
+    *"$PLACEHOLDER"*) has_placeholder=1 ;;
 esac
 
 format_distribution_name() {
@@ -149,28 +149,33 @@ while IFS= read -r line; do
     fi
 done < "$WORKFLOW_PATH"
 
-[[ ${#os_images[@]} -gt 0 ]] || die "Could not parse any matrix.os entries from workflow"
-[[ ${#arches[@]} -gt 0 ]] || die "Could not parse any matrix.arch entries from workflow"
+if [[ $has_placeholder -eq 1 ]]; then
+    [[ ${#os_images[@]} -gt 0 ]] || die "Could not parse any matrix.os entries from workflow"
+    [[ ${#arches[@]} -gt 0 ]] || die "Could not parse any matrix.arch entries from workflow"
+fi
 
-arch_md=""
-for arch in "${arches[@]}"; do
-    if [[ -n "$arch_md" ]]; then
-        arch_md+=", "
-    fi
-    arch_md+="\`$arch\`"
-done
+table=""
+if [[ $has_placeholder -eq 1 ]]; then
+    arch_md=""
+    for arch in "${arches[@]}"; do
+        if [[ -n "$arch_md" ]]; then
+            arch_md+=", "
+        fi
+        arch_md+="\`$arch\`"
+    done
 
-table="| ${DISTRO_HEADER} | ${CODENAME_HEADER} | ${ARCH_HEADER} |
+    table="| ${DISTRO_HEADER} | ${CODENAME_HEADER} | ${ARCH_HEADER} |
 | $(make_separator_row "${#DISTRO_HEADER}") | $(make_separator_row "${#CODENAME_HEADER}") | $(make_separator_row "${#ARCH_HEADER}") |"
 
-for i in "${!os_images[@]}"; do
-    image="${os_images[$i]}"
-    codename="${os_codenames[$i]}"
-    distro="$(format_distribution_name "$image")"
+    for i in "${!os_images[@]}"; do
+        image="${os_images[$i]}"
+        codename="${os_codenames[$i]}"
+        distro="$(format_distribution_name "$image")"
 
-    printf -v row "| %s | \`%s\` | %s |" "$distro" "$codename" "$arch_md"
-    table+=$'\n'"$row"
-done
+        printf -v row "| %s | \`%s\` | %s |" "$distro" "$codename" "$arch_md"
+        table+=$'\n'"$row"
+    done
+fi
 
 mkdir -p "$(dirname "$OUTPUT_PATH")"
 

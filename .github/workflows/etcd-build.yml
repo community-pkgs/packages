@@ -43,15 +43,21 @@ jobs:
           ALWAYS_BUILD: ${{ github.event_name == 'workflow_dispatch' }}
         run: bash scripts/check-release.sh
 
-      - name: Commit release state
+      - name: Commit release state and generated README
         if: github.event_name == 'schedule' && steps.check.outputs.latest_tag != ''
         run: |
+          PAGES_URL="https://pkgs.bil.co.ua" \
+          bash scripts/generate-readme.sh \
+            packages/etcd/README.md \
+            packages/etcd/README.md.in \
+            .github/workflows/etcd-build.yml
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add state/etcd.json
+          git add state/etcd.json packages/etcd/README.md
 
           if git diff --cached --quiet; then
-            echo "No changes to commit for release state"
+            echo "No changes to commit for release state or generated README"
           else
             git commit -m "chore: update last processed etcd release to ${{ steps.check.outputs.latest_tag }}"
             git push
