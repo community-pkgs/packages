@@ -153,7 +153,7 @@ ENDPANEL
   done < <(echo "$RELEASES_JSON" | jq -c '.[]')
 fi
 
-# logo
+# logo + favicon
 if [[ -n "${PROJECT_LOGO_PATH:-}" && -f "$PROJECT_LOGO_PATH" ]]; then
   _logo_css='    .logo-icon {
       width: 42px; height: 42px;
@@ -162,6 +162,7 @@ if [[ -n "${PROJECT_LOGO_PATH:-}" && -f "$PROJECT_LOGO_PATH" ]]; then
     }
     .logo-icon svg { width: 42px; height: 42px; display: block; }'
   _logo_html="$(cat "$PROJECT_LOGO_PATH")"
+  _favicon_href="data:image/svg+xml,$(sed 's/#/%23/g' "$PROJECT_LOGO_PATH" | tr -d '\n')"
 else
   _logo_css='    .logo-icon {
       width: 42px; height: 42px;
@@ -171,6 +172,7 @@ else
       font-size: 1.4rem;
     }'
   _logo_html='📦'
+  _favicon_href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📦</text></svg>'
 fi
 
 mkdir -p "$(dirname "$OUTPUT_PATH")"
@@ -182,6 +184,7 @@ cat > "$OUTPUT_PATH" <<HTML
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${PAGE_TITLE}</title>
+  <link rel="icon" href="${_favicon_href}" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
