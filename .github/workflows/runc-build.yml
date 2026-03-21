@@ -54,7 +54,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add --ignore-missing state/runc.json packages/runc/README.md
+          git add state/runc.json packages/runc/README.md
 
           if git diff --cached --quiet; then
             echo "No changes to commit for release state or generated README"

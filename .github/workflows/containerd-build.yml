@@ -54,7 +54,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add --ignore-missing state/containerd.json packages/containerd/README.md
+          git add state/containerd.json packages/containerd/README.md
 
           if git diff --cached --quiet; then
             echo "No changes to commit for release state or generated README"
