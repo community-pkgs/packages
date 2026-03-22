@@ -39,6 +39,7 @@ jobs:
           UPSTREAM_REPO: mikefarah/yq
           SINGLE_SUITE: "true"
           SUITE_NAME: yq-go
+          STATE_FILE: state/yq-go.json
           FORCE_TAG: ${{ github.event.inputs.release_tag }}
           ALWAYS_BUILD: ${{ github.event_name == 'workflow_dispatch' }}
         run: bash scripts/check-release.sh
