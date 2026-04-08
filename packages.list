@@ -1,5 +1,6 @@
 containerd|containerd|Industry-standard container runtime (CNCF graduated project)
 etcd|etcd|Distributed reliable key-value store for Kubernetes
+go2rtc|go2rtc|Ultimate camera streaming application with support for dozens of formats and protocols
 runc|runc|OCI container runtime used by containerd and Docker
 storcli|storcli|Broadcom MegaRAID StorCLI storage management tool
 valkey|valkey|High-performance in-memory data store (Redis fork)
