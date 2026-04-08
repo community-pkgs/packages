@@ -1,9 +1,8 @@
 # go2rtc APT Repository
 
 [go2rtc](https://github.com/AlexxIT/go2rtc) is the ultimate camera streaming application with support
-for dozens of formats and protocols. It provides zero-dependency streaming with the lowest possible
-latency, two-way audio, on-the-fly transcoding via FFmpeg, and can be integrated into any project
-or used as a standalone app.
+for dozens of formats and protocols. It provides zero-dependency, zero-delay streaming with support for
+RTSP, WebRTC, HomeKit, ONVIF, FFmpeg, and many more.
 
 This repository provides **unofficial** Debian/Ubuntu `.deb` packages for go2rtc,
 built automatically from official upstream releases and published as an APT repository
@@ -66,11 +65,12 @@ sudo apt install go2rtc
 ### `go2rtc`
 
 - Installs the `go2rtc` binary to `/usr/bin/go2rtc`
-- Includes a systemd unit `go2rtc.service` (installed but **not enabled** by default)
-- Runs as a dedicated `go2rtc` system user
-- Default configuration at `/etc/go2rtc/go2rtc.yaml`
 - Statically linked — no runtime dependencies
-- Default ports: **1984** (HTTP API), **8554** (RTSP), **8555** (WebRTC TCP/UDP)
+- systemd unit: `go2rtc.service` (installed but **not enabled** by default)
+- Runs as the `go2rtc` system user (created automatically on install)
+- Configuration directory: `/etc/go2rtc/`
+- Default configuration: `/etc/go2rtc/go2rtc.yaml`
+- Default ports: `1984` (API/WebUI), `8554` (RTSP), `8555` (WebRTC TCP/UDP)
 
 ---
 
@@ -79,7 +79,7 @@ sudo apt install go2rtc
 After installation, edit the configuration file:
 
 ```sh
-sudo nano /etc/go2rtc/go2rtc.yaml
+sudo editor /etc/go2rtc/go2rtc.yaml
 ```
 
 A minimal example:
@@ -89,13 +89,13 @@ streams:
   my_camera: rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0
 ```
 
-Enable and start the service:
+Then enable and start the service:
 
 ```sh
 sudo systemctl enable --now go2rtc
 ```
 
-The web interface is available at `http://localhost:1984/`.
+The web interface will be available at `http://localhost:1984/`.
 
 Full documentation: [github.com/AlexxIT/go2rtc](https://github.com/AlexxIT/go2rtc)
 

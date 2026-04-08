@@ -1,10 +1,10 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: go2rtc
-Upstream-Contact: Alex Khit <https://github.com/AlexxIT>
+Upstream-Contact: Alexey Khit <https://github.com/AlexxIT>
 Source: https://github.com/AlexxIT/go2rtc
 
 Files: *
-Copyright: 2022-2026 Alex Khit (AlexxIT)
+Copyright: 2022-2026 Alexey Khit (AlexxIT)
 License: MIT
 
 Files: debian/*

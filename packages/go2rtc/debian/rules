@@ -15,19 +15,18 @@ override_dh_auto_build:
 override_dh_auto_test:
 	@true
 
+override_dh_dwz:
+	@true
+
+override_dh_strip:
+	@true
+
 override_dh_auto_install:
 	install -D -m 755 binaries/go2rtc \
 		$(CURDIR)/debian/go2rtc/usr/bin/go2rtc
 
-	install -d -m 750 $(CURDIR)/debian/go2rtc/etc/go2rtc
-	printf '%s\n' \
-		'# go2rtc configuration file' \
-		'# Full documentation: https://github.com/AlexxIT/go2rtc' \
-		'#' \
-		'# streams:' \
-		'#   my_camera: rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0' \
-		> $(CURDIR)/debian/go2rtc/etc/go2rtc/go2rtc.yaml
-	chmod 640 $(CURDIR)/debian/go2rtc/etc/go2rtc/go2rtc.yaml
+	install -D -m 640 debian/go2rtc.yaml \
+		$(CURDIR)/debian/go2rtc/etc/go2rtc/go2rtc.yaml
 
 	install -d -m 750 $(CURDIR)/debian/go2rtc/var/lib/go2rtc
 

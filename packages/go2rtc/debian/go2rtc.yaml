@@ -1,0 +1,38 @@
+# go2rtc configuration file
+# Full documentation: https://github.com/AlexxIT/go2rtc
+
+# streams:
+#   my_camera: rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0
+
+api:
+  listen: ":1984"
+  # username: ""
+  # password: ""
+
+# rtsp:
+#   listen: ":8554"
+#   username: ""
+#   password: ""
+#   default_query: "video&audio"
+
+# webrtc:
+#   listen: ":8555"
+#   candidates:
+#     - stun:8555
+
+# ffmpeg:
+#   bin: "ffmpeg"
+
+# homekit:
+#   my_camera:
+#     pin: "19550224"
+
+log:
+  level: "info"
+  output: "stdout"
+
+# publish:
+#   my_camera: rtmp://xxx.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx
+
+# preload:
+#   my_camera: "video&audio"

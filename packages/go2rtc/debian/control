@@ -9,6 +9,7 @@ Homepage: https://github.com/AlexxIT/go2rtc
 Package: go2rtc
 Architecture: any
 Depends:
+ adduser,
  ${misc:Depends},
 Recommends:
  ffmpeg,
