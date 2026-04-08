@@ -1,0 +1,25 @@
+Source: go2rtc
+Section: video
+Priority: optional
+Maintainer: community-pkgs <https://github.com/community-pkgs/packages>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Homepage: https://github.com/AlexxIT/go2rtc
+
+Package: go2rtc
+Architecture: any
+Depends:
+ ${misc:Depends},
+Recommends:
+ ffmpeg,
+Description: Ultimate camera streaming application
+ go2rtc is a zero-dependency camera streaming application with support for
+ dozens of formats and protocols. It provides zero-delay streaming for many
+ supported protocols with the lowest possible latency.
+ .
+ Features include streaming from RTSP, WebRTC, ONVIF, HomeKit, RTMP, HLS,
+ and many more protocols; on-the-fly transcoding via FFmpeg when necessary;
+ two-way audio support; and a built-in web interface for configuration and
+ monitoring.
+ .
+ Default ports: 1984 (API/WebUI), 8554 (RTSP), 8555 (WebRTC).

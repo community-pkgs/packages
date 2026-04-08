@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    purge)
+        if getent passwd go2rtc > /dev/null 2>&1; then
+            deluser --quiet --system go2rtc || true
+        fi
+
+        if getent group go2rtc > /dev/null 2>&1; then
+            delgroup --quiet --system go2rtc || true
+        fi
+
+        rm -rf /var/lib/go2rtc
+        rm -rf /etc/go2rtc
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

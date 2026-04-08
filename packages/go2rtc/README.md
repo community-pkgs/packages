@@ -1,0 +1,107 @@
+# go2rtc APT Repository
+
+[go2rtc](https://github.com/AlexxIT/go2rtc) is the ultimate camera streaming application with support
+for dozens of formats and protocols. It provides zero-dependency, zero-delay streaming with support for
+RTSP, WebRTC, HomeKit, ONVIF, FFmpeg, and many more.
+
+This repository provides **unofficial** Debian/Ubuntu `.deb` packages for go2rtc,
+built automatically from official upstream releases and published as an APT repository
+at [pkgs.bil.co.ua](https://pkgs.bil.co.ua) via Cloudflare R2.
+
+---
+
+## Compatibility
+
+This package uses the official pre-built upstream binaries from
+[AlexxIT/go2rtc releases](https://github.com/AlexxIT/go2rtc/releases).
+The binaries are statically compiled Go executables with no distribution-specific
+dependencies, and work on any reasonably modern Debian or Ubuntu release
+(`amd64` and `arm64`).
+
+---
+
+## Packages
+
+| Package   | Description                                          |
+|-----------|------------------------------------------------------|
+| `go2rtc`  | Camera streaming application (`/usr/bin/go2rtc`)     |
+
+---
+
+## Installation
+
+### 1. Add the GPG signing key
+
+```sh
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://pkgs.bil.co.ua/public.asc | sudo gpg --dearmor -o /etc/apt/keyrings/go2rtc.gpg
+```
+
+### 2. Add the repository
+
+```sh
+echo "deb [signed-by=/etc/apt/keyrings/go2rtc.gpg] https://pkgs.bil.co.ua go2rtc main" \
+  | sudo tee /etc/apt/sources.list.d/go2rtc.list
+```
+
+### 3. Pin the repository
+
+```sh
+echo -e 'Package: *\nPin: release a=go2rtc\nPin-Priority: 1001' \
+  | sudo tee /etc/apt/preferences.d/go2rtc
+```
+
+### 4. Update and install
+
+```sh
+sudo apt update
+sudo apt install go2rtc
+```
+
+---
+
+## Package details
+
+### `go2rtc`
+
+- Installs the `go2rtc` binary to `/usr/bin/go2rtc`
+- Statically linked — no runtime dependencies
+- systemd unit: `go2rtc.service` (installed but **not enabled** by default)
+- Runs as the `go2rtc` system user (created automatically on install)
+- Configuration directory: `/etc/go2rtc/`
+- Default configuration: `/etc/go2rtc/go2rtc.yaml`
+- Default ports: `1984` (API/WebUI), `8554` (RTSP), `8555` (WebRTC TCP/UDP)
+
+---
+
+## Configuration
+
+After installation, edit the configuration file:
+
+```sh
+sudo editor /etc/go2rtc/go2rtc.yaml
+```
+
+A minimal example:
+
+```yaml
+streams:
+  my_camera: rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0
+```
+
+Then enable and start the service:
+
+```sh
+sudo systemctl enable --now go2rtc
+```
+
+The web interface will be available at `http://localhost:1984/`.
+
+Full documentation: [github.com/AlexxIT/go2rtc](https://github.com/AlexxIT/go2rtc)
+
+---
+
+## Build details
+
+- Packages use the official pre-built upstream binaries from [AlexxIT/go2rtc releases](https://github.com/AlexxIT/go2rtc/releases)
+- Packages are GPG-signed

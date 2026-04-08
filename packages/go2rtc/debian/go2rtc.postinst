@@ -1,0 +1,28 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        if ! getent group go2rtc > /dev/null 2>&1; then
+            addgroup --system go2rtc
+        fi
+
+        if ! getent passwd go2rtc > /dev/null 2>&1; then
+            adduser --system --ingroup go2rtc --home /var/lib/go2rtc \
+                --no-create-home --shell /usr/sbin/nologin \
+                --gecos "go2rtc daemon" go2rtc
+        fi
+
+        chown go2rtc:go2rtc /var/lib/go2rtc
+        chmod 0750 /var/lib/go2rtc
+
+        if [ -d /etc/go2rtc ]; then
+            chown root:go2rtc /etc/go2rtc
+            chmod 0750 /etc/go2rtc
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
