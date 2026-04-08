@@ -153,6 +153,33 @@ PACKAGES_DIR="${PACKAGES_DIR}" \
 OUTPUT_PATH="./repo/index.html" \
 bash scripts/generate-root-index.sh "${root_args[@]}"
 
+# ── robots.txt ──
+cat > ./repo/robots.txt <<ROBOTS
+User-agent: *
+Allow: /
+Sitemap: ${PAGES_URL}/sitemap.xml
+ROBOTS
+log "Generated robots.txt"
+
+# ── sitemap.xml ──
+_sitemap_date="$(date -u '+%Y-%m-%d')"
+{
+  cat <<SITEMAP_HEADER
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${PAGES_URL}/</loc><lastmod>${_sitemap_date}</lastmod></url>
+SITEMAP_HEADER
+
+  for entry in "${root_args[@]}"; do
+    IFS='|' read -r slug _ _ <<< "$entry"
+    [[ -n "$slug" ]] || continue
+    echo "  <url><loc>${PAGES_URL}/pages/${slug}.html</loc><lastmod>${_sitemap_date}</lastmod></url>"
+  done
+
+  echo "</urlset>"
+} > ./repo/sitemap.xml
+log "Generated sitemap.xml"
+
 # ── Sync to R2 ──
 log "Syncing repo to R2 (s3://${R2_BUCKET})..."
 _s3sync_push

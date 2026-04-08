@@ -187,6 +187,14 @@ cat > "$OUTPUT_PATH" <<HTML
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${PAGE_TITLE}</title>
+  <meta name="description" content="Unofficial Debian/Ubuntu .deb packages for ${PROJECT_NAME}. Built automatically from upstream releases and published as a signed APT repository." />
+  <link rel="canonical" href="${PAGES_URL}/pages/${PROJECT_SLUG}.html" />
+  <meta name="robots" content="index, follow" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="${PAGE_TITLE}" />
+  <meta property="og:description" content="Unofficial Debian/Ubuntu .deb packages for ${PROJECT_NAME}. Built automatically from upstream releases." />
+  <meta property="og:url" content="${PAGES_URL}/pages/${PROJECT_SLUG}.html" />
+  <meta property="og:site_name" content="APT Package Repository" />
   <link rel="icon" href="${_favicon_href}" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

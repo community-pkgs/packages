@@ -80,6 +80,14 @@ cat > "$tmp" <<HTML
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${REPO_TITLE}</title>
+  <meta name="description" content="${REPO_DESCRIPTION}" />
+  <link rel="canonical" href="${PAGES_URL}/" />
+  <meta name="robots" content="index, follow" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="${REPO_TITLE}" />
+  <meta property="og:description" content="${REPO_DESCRIPTION}" />
+  <meta property="og:url" content="${PAGES_URL}/" />
+  <meta property="og:site_name" content="${REPO_TITLE}" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
