@@ -11,6 +11,7 @@ and published as a signed APT repository at [pkgs.bil.co.ua](https://pkgs.bil.co
 |---------|-------------|--------|
 | [containerd](https://containerd.io) | Industry-standard container runtime (CNCF graduated project) | [Installation & details](packages/containerd/README.md) |
 | [etcd](https://etcd.io) | Distributed reliable key-value store for the most critical data of a distributed system | [Installation & details](packages/etcd/README.md) |
+| [go2rtc](https://github.com/AlexxIT/go2rtc) | Ultimate camera streaming application with support for dozens of formats and protocols | [Installation & details](packages/go2rtc/README.md) |
 | [runc](https://github.com/opencontainers/runc) | OCI container runtime used by containerd and Docker | [Installation & details](packages/runc/README.md) |
 | [StorCLI](https://www.broadcom.com/support/download-search?dk=StorCLI) | Broadcom MegaRAID StorCLI storage management tool | [Installation & details](packages/storcli/README.md) |
 | [valkey](https://valkey.io) | High-performance key-value store (BSD-licensed Redis fork) | [Installation & details](packages/valkey/README.md) |
