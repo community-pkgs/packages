@@ -81,6 +81,8 @@ jobs:
             codename: "trixie"
           - image: "debian:12"
             codename: "bookworm"
+          - image: "ubuntu:26.04"
+            codename: "resolute"
           - image: "ubuntu:24.04"
             codename: "noble"
           - image: "ubuntu:22.04"

@@ -15,6 +15,7 @@ at [pkgs.bil.co.ua](https://pkgs.bil.co.ua) via Cloudflare R2.
 | ------------ | -------- | ------------ |
 | Debian 13 | `trixie` | `amd64`, `arm64` |
 | Debian 12 | `bookworm` | `amd64`, `arm64` |
+| Ubuntu 26.04 LTS | `resolute` | `amd64`, `arm64` |
 | Ubuntu 24.04 LTS | `noble` | `amd64`, `arm64` |
 | Ubuntu 22.04 LTS | `jammy` | `amd64`, `arm64` |
 
