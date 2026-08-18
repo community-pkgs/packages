@@ -44,7 +44,7 @@ RUN mkdir -p binaries && \
 COPY packages/storcli/debian/ debian/
 
 RUN DEB_VERSION="$(echo "${RELEASE_TAG}" | sed 's/^0*//')" && \
-    printf '%s (%s-1~stable) stable; urgency=medium\n\n  * Upstream release %s.\n\n -- community-pkgs <https://github.com/community-pkgs/packages>  %s\n' \
+    printf '%s (%s-1~stable) stable; urgency=medium\n\n  * Upstream release %s.\n\n -- community-pkgs <community-pkgs@users.noreply.github.com>  %s\n' \
         "storcli" "${DEB_VERSION}" "${RELEASE_TAG}" "$(date -R)" > debian/changelog
 
 RUN chmod +x debian/rules && \

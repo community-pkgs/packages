@@ -1,7 +1,7 @@
 Source: yq-go
 Section: utils
 Priority: optional
-Maintainer: community-pkgs <https://github.com/community-pkgs/packages>
+Maintainer: community-pkgs <community-pkgs@users.noreply.github.com>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.7.2
 Homepage: https://github.com/mikefarah/yq

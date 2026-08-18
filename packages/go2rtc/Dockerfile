@@ -32,7 +32,7 @@ COPY --chmod=0755 scripts/gen-changelog-github.sh /usr/local/bin/gen-changelog-g
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
     gen-changelog-github.sh go2rtc AlexxIT/go2rtc "${RELEASE_TAG}" \
-        "community-pkgs <https://github.com/community-pkgs/packages>" stable
+        "community-pkgs <community-pkgs@users.noreply.github.com>" stable
 
 RUN chmod +x debian/rules && \
     sed -i "s/^Architecture: any$/Architecture: ${ARCH}/" debian/control && \
