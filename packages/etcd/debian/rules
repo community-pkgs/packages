@@ -23,9 +23,6 @@ override_dh_auto_install:
 	install -D -m 755 binaries/etcdutl \
 		$(CURDIR)/debian/etcd-client/usr/bin/etcdutl
 
-	install -D -m 644 debian/etcd.service \
-		$(CURDIR)/debian/etcd/lib/systemd/system/etcd.service
-
 	# Take upstream sample config, patch defaults for packaging.
 	cp binaries/etcd.conf.yml.sample $(CURDIR)/debian/etcd.conf.yml
 	sed -i \
